@@ -1,3 +1,7 @@
+## v5.0.2
+
+* made to support Cassandra 5.0.2
+
 ## v4.1.1
 
 * Reporter will be configured from the environment

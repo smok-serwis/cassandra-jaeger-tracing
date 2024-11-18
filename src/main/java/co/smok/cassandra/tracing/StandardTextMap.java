@@ -44,6 +44,7 @@ public class StandardTextMap implements TextMap {
         }
     }
 
+
     protected static StandardTextMap copyFrom(Map<String, String> parameters) {
         final StandardTextMap stm = new StandardTextMap();
         for (Map.Entry<String, String> entry : parameters.entrySet()) {
