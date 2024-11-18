@@ -39,7 +39,7 @@ final class JaegerTraceState extends TraceState {
 
     private static final Logger logger = LoggerFactory.getLogger(JaegerTraceState.class);
 
-    JaegerSpan span;
+    JaegerSpan span = null;
     private volatile long timestamp;
     private boolean stopped = false;
 
@@ -54,16 +54,13 @@ final class JaegerTraceState extends TraceState {
         super(coordinator, sessionId, traceType);
         this.tracer = tracer;
         this.parentSpan = parentSpan;
-        timestamp = clock.currentTimeMicros();
+        this.timestamp = clock.currentTimeMicros();
     }
 
     @Override
     protected void traceImpl(String message) {
         // we do it that way because Cassandra calls trace() when an operation completes, not when it starts
         // as is expected by Jaeger
-        if (this.span != null) {
-            this.tracer.activateSpan(this.span);
-        }
         final RegexpSeparator.AnalysisResult analysis = RegexpSeparator.match(message);
 
         JaegerTracer.SpanBuilder builder = tracer.buildSpan(analysis.getTraceName())
@@ -80,8 +77,9 @@ final class JaegerTraceState extends TraceState {
 
         final JaegerSpan span = builder.start();
         analysis.applyTags(span);
+        this.span.finish();
         this.span = span;
-        timestamp = clock.currentTimeMicros();
+        this.timestamp = clock.currentTimeMicros();
     }
 
     @Override
