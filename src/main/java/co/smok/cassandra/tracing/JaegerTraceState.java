@@ -34,7 +34,6 @@ import org.slf4j.LoggerFactory;
  */
 final class JaegerTraceState extends TraceState {
     private static final Clock clock = new SystemClock();
-    private static final int WAIT_FOR_PENDING_EVENTS_TIMEOUT_SECS = 60;
     private final JaegerTracer tracer;
 
     private static final Logger logger = LoggerFactory.getLogger(JaegerTraceState.class);
@@ -43,7 +42,7 @@ final class JaegerTraceState extends TraceState {
     private volatile long timestamp;
     private boolean stopped = false;
 
-    private JaegerSpan parentSpan = null;
+    protected JaegerSpan parentSpan = null;
 
     public JaegerTraceState(
             JaegerTracer tracer,
@@ -77,29 +76,18 @@ final class JaegerTraceState extends TraceState {
 
         final JaegerSpan span = builder.start();
         analysis.applyTags(span);
-        this.span.finish();
+        if (this.span != null)
+            this.span.finish();
         this.span = span;
         this.timestamp = clock.currentTimeMicros();
     }
 
     @Override
     protected void waitForPendingEvents() {
-        int sleepTime = 100;
-        int maxAttempts = WAIT_FOR_PENDING_EVENTS_TIMEOUT_SECS / sleepTime;
     }
 
     @Override
     public void stop() {
-        synchronized (this) {
-            if (stopped)
-                return;
-            stopped = true;
-        }
-
-        if (this.span != null) {
-            this.span.finish();
-            this.span = null;
-        }
-        super.stop();
+        this.parentSpan.finish();
     }
 }
