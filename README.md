@@ -49,8 +49,8 @@ for more information.
 You can also configure `JAEGER_ENDPOINT` instead to connect directly to collector. This is useful, because traces sometimes become quite large
 and TCP is needed to shop them.
 
-![cassandra-jaeger-tracing-select-query](https://user-images.githubusercontent.com/5154532/55792869-2ebf3300-5adf-11e9-9326-ad65f0e564ec.png
-"SELECT * FROM t;")
+![image](https://github.com/user-attachments/assets/d73bf8c5-15fa-46fa-bcec-521721a7f1f3)
+
 
 ## Background
 
