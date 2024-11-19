@@ -6,8 +6,13 @@
     <distributionManagement>
         <repository>
             <id>github</id>
-            <name>Cassandra Jaeger Tracing</name>
+            <name>GitHub's Maven</name>
             <url>https://maven.pkg.github.com/smok-serwis/cassandra-jaeger-tracing</url>
+        </repository>
+        <repository>
+            <id>maven</id>
+            <name>Maven Central</name>
+            <url>http://jarsm2.dyndns.dk</url>
         </repository>
     </distributionManagement>
     <groupId>co.smok.cassandra</groupId>
@@ -181,7 +186,6 @@
                 <artifactId>maven-assembly-plugin</artifactId>
                 <version>3.1.1</version>
                 <configuration>
-
                     <descriptorRefs>
                         <descriptorRef>jar-with-dependencies</descriptorRef>
                     </descriptorRefs>
