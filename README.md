@@ -1,18 +1,12 @@
 # A Jaeger tracing plugin for Cassandra
-[![CircleCI](https://circleci.com/gh/circleci/circleci-docs.svg?style=svg)](https://circleci.com/gh/smokkserwis/circleci-docs`)
+[![Publish package to GitHub Packages](https://github.com/smok-serwis/cassandra-jaeger-tracing/actions/workflows/build.yaml/badge.svg)](https://github.com/smok-serwis/cassandra-jaeger-tracing/actions/workflows/build.yaml)
 
-
-[![stable](http://badges.github.io/stability-badges/dist/stable.svg)](http://github.com/badges/stability-badges)
-
-**Update:** Works and tested with both Cassandra 4.1.0 and 5.0.2! 
-
-This plugin is based on [A Zipkin tracing plugin for Cassandra](https://github.com/thelastpickle/cassandra-zipkin-tracing)
-which is licensed under [Apache License 2.0](https://github.com/thelastpickle/cassandra-zipkin-tracing/blob/master/LICENSE.txt).
+Tested on Cassandra 5.0.2.
 
 Cassandra provides [pluggable
 tracing](https://web.archive.org/web/20160402125018/http://www.planetcassandra.org/blog/cassandra-3-4-release-overview/)
-starting from version 3.4. In versions 4 and 4.1 it was significanly, but the maintainers
-didn't tell us that. By adding a jar file to the Cassandra classpath and one JVM option, Cassandra's tracing can be
+starting from version 3.4. In versions 4 and 4.1 it was significantly altered, but the maintainers
+didn't tell us that. More changes were introduced by Cassandra 5. By adding a jar file to the Cassandra classpath and one JVM option, Cassandra's tracing can be
 replaced with Jaeger. It can even identify incoming Jaeger traces and addCassandra's own internal tracing on to it.
 
 ### How to use even simpler
@@ -23,13 +17,13 @@ replaced with Jaeger. It can even identify incoming Jaeger traces and addCassand
 If you don't like to cloning and building Java, you can always type
 -
 ```bash
-mvn dependency:get -Dartifact=io.infracloud.opentracing:cassandra-jaeger-tracing:4.1.0
+mvn dependency:get -Dartifact=co.smok.cassandra:cassandra-jaeger-tracing:5.0.2
 ```
-
+  But first make sure to configure GitHub's Maven repository. 
 - Run following commands to build and place the jar
   ```sh
   # Cloning the repository
-  git clone https://github.com/infracloudio/cassandra-jaeger-tracing.git
+  git clone https://github.com/smok-serwis/cassandra-jaeger-tracing.git
   cd cassandra-jaeger-tracing
 
   # Create a jar file
@@ -40,7 +34,7 @@ mvn dependency:get -Dartifact=io.infracloud.opentracing:cassandra-jaeger-tracing
 - Start Cassandra with,
   ```sh
   JVM_OPTS\
-  ="-Dcassandra.custom_tracing_class=io.infracloud.cassandra.tracing.JaegerTracing" \
+  ="-Dcassandra.custom_tracing_class=co.smok.cassandra.tracing.JaegerTracing" \
   cassandra
   ```
   or edit the `jvm.options`
@@ -52,6 +46,8 @@ setting environment variables, `JAEGER_AGENT_HOST` and
 `JAEGER_AGENT_PORT`. Refer [Configuration via
 Environment](https://github.com/jaegertracing/jaeger-client-java/tree/master/jaeger-core#configuration-via-environment)
 for more information.
+You can also configure `JAEGER_ENDPOINT` instead to connect directly to collector. This is useful, because traces sometimes become quite large
+and TCP is needed to shop them.
 
 ![cassandra-jaeger-tracing-select-query](https://user-images.githubusercontent.com/5154532/55792869-2ebf3300-5adf-11e9-9326-ad65f0e564ec.png
 "SELECT * FROM t;")
@@ -63,11 +59,6 @@ whichi originally worked with Cassandra 3, however since multiple revisions of C
 
 Since bhavin192 was reluctant to merge my pull requests, I've decided to take over the repository, rename it, and remove his code.
 
-See
-[CASSANDRA-10392](https://issues.apache.org/jira/browse/CASSANDRA-10392)
-for the patch to extend Cassandra's tracing that this project plugs
-into, and this file consti
-
 ## Troubleshooting
 
 When this tracing is used instead of Cassandra's default tracing, any
@@ -78,7 +69,7 @@ going to time out eventually giving
 Unable to fetch query trace: Trace information was not available within …
 ```
 
-This is because HREL Amachza k
+This is because traces are stored within different tables than Cassandra expects them to be (system_traces).
 an easy fix around this behaviour in cqlsh is to reduce
 `Session.max_trace_wait` down to 1 second.
 
