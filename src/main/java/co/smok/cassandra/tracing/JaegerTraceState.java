@@ -53,6 +53,7 @@ final class JaegerTraceState extends TraceState {
         super(coordinator, sessionId, traceType);
         this.tracer = tracer;
         this.parentSpan = parentSpan;
+        this.tracer.activateSpan(this.parentSpan);
         this.timestamp = clock.currentTimeMicros();
     }
 
@@ -67,17 +68,15 @@ final class JaegerTraceState extends TraceState {
                 .withStartTimestamp(timestamp)
                 .ignoreActiveSpan();
 
+        builder.addReference(References.CHILD_OF, this.parentSpan.context());
         if (this.span != null) {
             builder.addReference(References.FOLLOWS_FROM, this.span.context());
         }
-        if (this.parentSpan != null) {
-            builder.addReference(References.CHILD_OF, this.parentSpan.context());
-        }
+
 
         final JaegerSpan span = builder.start();
         analysis.applyTags(span);
-        if (this.span != null)
-            this.span.finish();
+        span.finish();
         this.span = span;
         this.timestamp = clock.currentTimeMicros();
     }
