@@ -156,7 +156,6 @@ public final class JaegerTracing extends Tracing {
     }
 
     private TimeUUID myNewSession(TimeUUID sessionId, TraceType traceType, StandardTextMap customPayload) {
-        this.logger.warn("newSession({}, {})", sessionId, traceType.toString());
         JaegerSpanContext parentSpan = JaegerTracingSetup.tracer.extract(Format.Builtin.HTTP_HEADERS, customPayload);
         // no need to trace if the parent is not sampled as well, aight?
         if (!parentSpan.isSampled()) {
@@ -170,7 +169,7 @@ public final class JaegerTracing extends Tracing {
         return sessionId;
     }
 
-    private TraceState newTraceState(InetAddressAndPort coordinator, TimeUUID sessionId, TraceType traceType,
+    private JaegerTraceState newTraceState(InetAddressAndPort coordinator, TimeUUID sessionId, TraceType traceType,
                                      JaegerSpanContext span) {
         JaegerTracer.SpanBuilder sb = JaegerTracingSetup.tracer.buildSpan(traceType.toString());
         if (span != null) {
