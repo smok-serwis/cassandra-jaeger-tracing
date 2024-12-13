@@ -1,6 +1,8 @@
 # A Jaeger tracing plugin for Cassandra
 [![Publish package to GitHub Packages](https://github.com/smok-serwis/cassandra-jaeger-tracing/actions/workflows/build.yaml/badge.svg)](https://github.com/smok-serwis/cassandra-jaeger-tracing/actions/workflows/build.yaml)
 
+This repository was inspired by [https://github.com/infracloudio/cassandra-jaeger-tracing](https://github.com/infracloudio/cassandra-jaeger-tracing).
+
 Tested on Cassandra 5.0.2.
 
 Cassandra provides [pluggable
