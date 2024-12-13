@@ -122,7 +122,10 @@ public class RegexpSeparator {
                     "MUTATION_RSP message received from (?<othernode>.*)", new String[]{"othernode"}),
             new SingleRegexp("READ_RSP message received",
                     "READ_RSP message received from (?<othernode>.*)", new String[]{"othernode"}),
-            new SingleRegexp("Sending READ_REQ message", "Sending READ_REQ message to (?<othernode>.*) message size (?<bytes>\\d+) bytes", new String[]{"othernode", "bytes"})
+            new SingleRegexp("Sending READ_REQ message", "Sending READ_REQ message to (?<othernode>.*) message size (?<bytes>\\d+) bytes", new String[]{"othernode", "bytes"}),
+            new SingleRegexp("READ_REQ message received", "READ_REQ message received from (?<othernode>.*)", new String[]{"othernode"}),
+            new SingleRegexp("Key cache hit", "Key cache hit for ssstable (?<sstable>\\d+), size = (?<size>\\d+)", new String[]{"sstable", "size"}),
+
     };
 
     static public AnalysisResult match(String trace) {

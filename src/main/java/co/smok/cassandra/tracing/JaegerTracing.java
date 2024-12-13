@@ -1,5 +1,6 @@
 package co.smok.cassandra.tracing;
 
+import ch.qos.logback.core.pattern.color.BoldYellowCompositeConverter;
 import io.jaegertracing.internal.JaegerSpan;
 import io.jaegertracing.internal.JaegerSpanContext;
 import io.jaegertracing.internal.JaegerTracer;
@@ -7,6 +8,8 @@ import io.jaegertracing.internal.propagation.BinaryCodec;
 import io.opentracing.References;
 import io.opentracing.Span;
 import io.opentracing.propagation.Binary;
+import io.opentracing.propagation.BinaryExtract;
+import io.opentracing.propagation.BinaryInject;
 import io.opentracing.propagation.Format;
 import io.opentracing.tag.Tags;
 import org.apache.cassandra.locator.InetAddressAndPort;
@@ -20,51 +23,68 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.sql.Time;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * This is instantiated single
  */
 public final class JaegerTracing extends Tracing {
 
-    private static final String JAEGER_HEADER = "jaeger-header";
-    private static final JaegerTracingSetup setup = new JaegerTracingSetup();
+    private static final String JAEGER_HEADER = (System.getenv("JAEGER_TRACE_KEY") == null) ? "uber-trace-id" : System.getenv("JAEGER_TRACE_KEY");
+    protected static final JaegerTracingSetup setup = new JaegerTracingSetup();
 
     private static final Logger logger = LoggerFactory.getLogger(JaegerTracing.class);
 
-
+    private static final InetAddressAndPort localHost = InetAddressAndPort.getLocalHost();
     /* a empty constructor is necessary for Cassandra to initialize this class **/
-    public JaegerTracing() {}
+    public JaegerTracing() {
+    }
 
     /**
-     * Stop the session processed by the current thread
+     * Stop the session processed by the current thread.
+     * Everything was already done by our JaegerTraceState, including stopping the parent thread.
      */
     @Override
     protected void stopSessionImpl() {
-        final JaegerTraceState state = (JaegerTraceState) get();
-        if (state != null) {
-            sessions.remove(state.sessionId);
-            set(null);
-        }
     }
 
     @Override
     /**
-     * This is called at the coordinator to start tracing
-     * This is meant to be used by implementations that need access to the message payload to begin their tracing.
+     * This is called at the coordinator to start tracing.
      *
-     * Since our tracing headers are to be found within the customPayload, this use case is warranted.
+     * At this point the trace is set, and is available to obtain via get()
      *
-     * @param customPayload note that this might be null
+     * @param parameters likely to contain info about queries
      */
     public TraceState begin(String request, InetAddress client, Map<String, String> parameters) {
-        this.logger.trace("begin({}, {}, {})", request, client, parameters.toString());
-        JaegerTraceState state = (JaegerTraceState) get();
-        state.parentSpan.setTag("request", request);
-        if (client != null) {
-            state.parentSpan.setTag(Tags.SPAN_KIND_CLIENT, client.toString());
+        this.logger.info("begin({}, {}, {})", request, client, parameters.toString());
+        TraceState t_state = get();
+
+        assert t_state != null;
+
+        if (t_state instanceof EmptyTraceState) {
+            return t_state;
+        }
+
+        JaegerTraceState state = (JaegerTraceState)t_state;
+
+        if (state.parentSpan == null) {
+            state.setSpan();
+            state.parentSpan.setTag("request", request);
+            String query = parameters.get("query");
+            if (query != null) {
+                state.parentSpan.setTag("db.statement", client.toString());
+            }
+            if (client != null) {
+                state.parentSpan.setTag("client", client.toString());
+            }
         }
         set(state);
         return state;
@@ -73,18 +93,27 @@ public final class JaegerTracing extends Tracing {
 
     @Override
     public Map<ParamType, Object> addTraceHeaders(Map<ParamType, Object> addToMutable) {
-        final Span span = JaegerTracingSetup.tracer.activeSpan();
-        if (span != null) {
-            final BinaryString bin_str = new BinaryString();
-            final BinaryCodec bc = new BinaryCodec();
-            bc.inject(((JaegerSpanContext)span.context()), bin_str);
-
-            addToMutable.put(
-                    ParamType.CUSTOM_MAP,
-                    new LinkedHashMap<String, byte[]>() {{
-                        put(JAEGER_HEADER, bin_str.bytes);
-                    }});
+        JaegerTraceState state = (JaegerTraceState) get();
+        if (state == null) {
+            return addToMutable;
         }
+        JaegerSpan span = state.span;
+        if (span == null) {
+            span = state.parentSpan;
+            if (span == null) {
+                // Apparerntly that did not help one bit
+                return addToMutable;
+            }
+        }
+        BinaryString bin_str = new BinaryString();
+        JaegerTracingSetup.tracer.inject(span.context(), Format.Builtin.BINARY, bin_str);
+        logger.warn("Adding context: "+span.context().toString());
+        addToMutable.put(
+                ParamType.CUSTOM_MAP,
+                new LinkedHashMap<String, byte[]>() {{
+                    put(JAEGER_HEADER, bin_str.bytes());
+                }});
+        addToMutable.put(ParamType.TRACE_SESSION, state.sessionId);
         return addToMutable;
     }
 
@@ -93,109 +122,163 @@ public final class JaegerTracing extends Tracing {
      * Called for non-local traces (traces that are not initiated by local node == coordinator).
      */
     public void trace(final ByteBuffer sessionId, final String message, final int ttl) {
-        this.logger.trace("trace({}, {})", sessionId, message, ttl);
-        final TimeUUID sessionUuid = TimeUUID.deserialize(sessionId);
-        final TraceState state = sessions.get(sessionUuid);
-        if (state == null) {
-            return;
-        }
-        state.trace(message);
+        logger.warn("trace() non-local got called with"+message);
     }
 
     @Override
+    public void traceOutgoingMessage(Message<?> message, int serializedSize, InetAddressAndPort sendTo)
+    {
+        if (message.traceSession() == null) {
+            return;
+        }
+        TraceState t_s = get(message.traceSession());
+        if (t_s == null) {
+            return;
+        }
+        if (t_s instanceof EmptyTraceState) {
+            return;
+        }
+        JaegerTraceState jts = (JaegerTraceState)t_s;
+
+        if (message.verb().isResponse()) {
+            jts.subRef();
+        } else {
+            jts.addRef();
+            logger.warn("Tracing outgoing message " + message.verb().toString() + "going towards " + sendTo.toString() + " message has headers " + message.header.customParams().toString() + " and a sessionId of" + jts.sessionId.toString());
+        }
+    }
+
+
+    @Override
+    /**
+     * This is invoked whether a replica receives a message from a coordinator, or the coordinator receives a response.
+     *
+     * This is alloowed to return a null
+     */
     public TraceState initializeFromMessage(final Message.Header header) {
-        if (header.customParams() == null)
+        if (header.customParams() == null) {
             return null;
+        }
 
         final byte[] bytes = header.customParams().get(JAEGER_HEADER);
 
-        if (bytes == null)
-            return null;
-        // I did not write this using tracer's .extract and .inject() because I'm a Java noob - @piotrmaslanka
-        final BinaryString bt = new JaegerTracing.BinaryString(bytes);
-        final BinaryCodec bc = new BinaryCodec();
-        final JaegerSpanContext context = bc.extract(bt);
-        final JaegerTracer.SpanBuilder builder = JaegerTracingSetup.tracer.buildSpan(header.verb.toString()).asChildOf(context);
-        final JaegerSpan span = builder.start();
-        return new JaegerTraceState(JaegerTracingSetup.tracer, header.from, header.traceSession(), header.traceType(),
-                span);
-    }
-
-    @Override
-    public TimeUUID newSession(Map<String, ByteBuffer> customPayload) {
-        return this.myNewSession(TimeUUID.Generator.nextTimeUUID(), Tracing.TraceType.QUERY, new StandardTextMap(customPayload));
-    }
-
-    @Override
-    public TimeUUID newSession(TraceType traceType) {
-        return this.myNewSession(TimeUUID.Generator.nextTimeUUID(), traceType, new StandardTextMap());
-    }
-
-    @Override
-    public TimeUUID newSession(TimeUUID sessionId, Map<String, ByteBuffer> customPayload) {
-        return this.myNewSession(sessionId, Tracing.TraceType.QUERY, new StandardTextMap(customPayload));
-    }
-
-    private TimeUUID myNewSession(TimeUUID sessionId, TraceType traceType, StandardTextMap customPayload) {
-        JaegerSpanContext parentSpan = JaegerTracingSetup.tracer.extract(Format.Builtin.HTTP_HEADERS, customPayload);
-        // no need to trace if the parent is not sampled as well, aight?
-        if (!parentSpan.isSampled()) {
+        if (bytes == null) {
             return null;
         }
 
-        // this is valid even when parentSpan is null
-        final TraceState ts = newTraceState(JaegerTracingSetup.coordinator, sessionId, traceType, parentSpan);
-        set(ts);
-        sessions.put(sessionId, ts);
+        TimeUUID sessionId = header.traceSession();
+        if (sessionId == null) {
+            return null;
+        }
+
+        // only coordinators get responses
+        if (header.verb.isResponse()) {
+            TraceState state = get(sessionId);
+            if (state == null) {
+                logger.warn("Spurious result seen");
+                return null;
+            }
+            if (state instanceof EmptyTraceState) {
+                return null;
+            }
+            JaegerTraceState j_state = (JaegerTraceState) state;
+            j_state.subRef();
+            return state;
+        }
+
+        TraceState t_s = get(sessionId);
+        if (t_s != null) {
+            return t_s;
+        }
+
+
+        // I did not write this using tracer's .extract and .inject() because I'm a Java noob - @piotrmaslanka
+        JaegerTracing.BinaryString ebs = new JaegerTracing.BinaryString(bytes);
+        final JaegerSpanContext context = JaegerTracingSetup.tracer.extract(Format.Builtin.BINARY, ebs);
+        if (context == null) {
+            return null;
+        }
+        JaegerTracer.SpanBuilder builder = JaegerTracingSetup.tracer.buildSpan(header.traceType().toString()).asChildOf(context).ignoreActiveSpan();
+        JaegerTraceState trace = new JaegerTraceState(header.from, sessionId, header.traceType(), builder);
+        sessions.put(sessionId, trace);
+        logger.warn("Initialized a subsession "+context.toString()+" with sessionId of "+sessionId.toString());
+        return trace;
+    }
+
+    @Override
+    protected TraceState newTraceState(InetAddressAndPort coordinator, TimeUUID sessionId, Tracing.TraceType traceType) {
+        assert false;   // should never get here
+        return null;
+    }
+
+    protected TimeUUID newSession(TimeUUID sessionId, TraceType traceType, Map<String,ByteBuffer> customPayload)
+    {
+        assert get() == null;
+
+        ByteBuffer b = customPayload.get(JAEGER_HEADER);
+        TraceState traceState = null;
+        if (b == null) {
+             traceState = new EmptyTraceState(localHost, sessionId, traceType);
+        } else {
+            final StandardTextMap sm = new StandardTextMap(customPayload);
+            JaegerSpanContext context = JaegerTracingSetup.tracer.extract(Format.Builtin.HTTP_HEADERS, sm);
+            if (context == null) {
+                traceState = new EmptyTraceState(localHost, sessionId, traceType);
+            } else {
+                JaegerTracer.SpanBuilder builder = JaegerTracingSetup.tracer.buildSpan(traceType.toString()).asChildOf(context).ignoreActiveSpan().withTag("started_at", Instant.now().toString()).withTag("coordinator", localHost.toString()).withTag("thread", Thread.currentThread().getName());
+                traceState = new JaegerTraceState(localHost, sessionId, traceType, builder.start());
+            }
+        }
+        set(traceState);
+        sessions.put(sessionId, traceState);
         return sessionId;
     }
 
-    private JaegerTraceState newTraceState(InetAddressAndPort coordinator, TimeUUID sessionId, TraceType traceType,
-                                     JaegerSpanContext span) {
-        JaegerTracer.SpanBuilder sb = JaegerTracingSetup.tracer.buildSpan(traceType.toString());
-        if (span != null) {
-            sb = sb.addReference(References.CHILD_OF, span);
+    public static class InjectBinaryString implements BinaryInject {
+        public byte[] bytes = null;
+
+        public InjectBinaryString() {}
+
+        public String toString() {
+            if (this.bytes == null) return "null";
+            return new String(this.bytes, StandardCharsets.UTF_8);
         }
-        JaegerSpan currentSpan = sb.start();
-        currentSpan.setTag("thread", Thread.currentThread().getName());
-        currentSpan.setTag("sessionId", sessionId.toString());
-        currentSpan.setTag("coordinator", coordinator.toString());
-        currentSpan.setTag("started_at", Instant.now().toString());
-
-        return  new JaegerTraceState(
-                JaegerTracingSetup.tracer,
-                coordinator,
-                sessionId,
-                traceType,
-                currentSpan);
-    }
-
-    @Override
-    protected TraceState newTraceState(InetAddressAndPort coordinator, TimeUUID sessionId, TraceType traceType) {
-        return newTraceState(coordinator, sessionId, traceType, null);
-    }
-
-    public static class BinaryString extends BinaryCodec implements Binary {
-        public byte[] bytes;
-
-        public BinaryString() {
-            this.bytes = new byte[64];
-        }
-
-        public BinaryString(byte[] arg) {
-            this.bytes = arg;
-        }
-
 
         @Override
         public ByteBuffer injectionBuffer(int i) {
-            return ByteBuffer.wrap(this.bytes);
+            this.bytes = new byte[i];
+            ByteBuffer bb = ByteBuffer.wrap(this.bytes);
+            bb.position(0);
+            return bb;
+        }
+    }
+
+    public static class BinaryString implements Binary {
+        private ByteBuffer bb = null;
+
+        public BinaryString(byte[] bytes) {
+            this.bb = ByteBuffer.wrap(bytes).asReadOnlyBuffer();
+        }
+
+        public BinaryString() {}
+
+        public byte[] bytes() {
+            return this.bb.array();
+        }
+
+        @Override
+        public ByteBuffer injectionBuffer(int length) {
+            assert this.bb == null;
+            this.bb = ByteBuffer.allocate(length);
+            return this.bb;
         }
 
         @Override
         public ByteBuffer extractionBuffer() {
-            return ByteBuffer.wrap(this.bytes);
+            assert this.bb != null;
+            return this.bb;
         }
+
     }
 
 }

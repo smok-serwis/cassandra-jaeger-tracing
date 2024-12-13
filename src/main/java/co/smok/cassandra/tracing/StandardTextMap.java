@@ -1,6 +1,8 @@
 package co.smok.cassandra.tracing;
 
 import io.opentracing.propagation.TextMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -13,6 +15,8 @@ import java.util.Map;
 public class StandardTextMap implements TextMap {
     private static final Charset charset = StandardCharsets.UTF_8;
     private final Map<String, String> map = new HashMap<>();
+
+    private static final Logger logger = LoggerFactory.getLogger(JaegerTracing.class);
 
     protected StandardTextMap() {
     }
@@ -68,6 +72,19 @@ public class StandardTextMap implements TextMap {
         sb.deleteCharAt(sb.length() - 1);
         sb.append(">");
         return sb.toString();
+    }
+
+    public byte[] getBytes(String s) {
+        logger.info("Getting bytes "+s);
+        String bytes = this.map.get(s);
+        if (bytes == null) {
+            return null;
+        }
+        return charset.encode(bytes).array();
+    }
+
+    public String get(String s) {
+        return this.map.get(s);
     }
 
     @Override
