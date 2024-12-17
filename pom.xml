@@ -17,7 +17,7 @@
     </distributionManagement>
     <groupId>co.smok.cassandra</groupId>
     <artifactId>cassandra-jaeger-tracing</artifactId>
-    <version>5.0.2-SNAPSHOT</version>
+    <version>5.0.2</version>
     <packaging>jar</packaging>
     <developers>
     <developer>

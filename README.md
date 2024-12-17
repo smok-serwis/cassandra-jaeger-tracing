@@ -1,15 +1,14 @@
 # A Jaeger tracing plugin for Cassandra
-[![Publish package to GitHub Packages](https://github.com/smok-serwis/cassandra-jaeger-tracing/actions/workflows/build.yaml/badge.svg)](https://github.com/smok-serwis/cassandra-jaeger-tracing/actions/workflows/build.yaml)
 
-This repository was inspired by [https://github.com/infracloudio/cassandra-jaeger-tracing](https://github.com/infracloudio/cassandra-jaeger-tracing).
+This repository is a continuation of [https://github.com/infracloudio/cassandra-jaeger-tracing](https://github.com/infracloudio/cassandra-jaeger-tracing).
 
-Tested on Cassandra 5.0.2.
+Work is progressing on Cassandra 5.0.2.
 
 Cassandra provides [pluggable
 tracing](https://web.archive.org/web/20160402125018/http://www.planetcassandra.org/blog/cassandra-3-4-release-overview/)
 starting from version 3.4. In versions 4 and 4.1 it was significantly altered, but the maintainers
 didn't tell us that. More changes were introduced by Cassandra 5. By adding a jar file to the Cassandra classpath and one JVM option, Cassandra's tracing can be
-replaced with Jaeger. It can even identify incoming Jaeger traces and addCassandra's own internal tracing on to it.
+replaced with Jaeger. It is meant to continue parent traces made by your microservices.
 
 ### How to use even simpler
 
@@ -53,13 +52,12 @@ and TCP is needed to shop them.
 
 ![image](https://github.com/user-attachments/assets/d73bf8c5-15fa-46fa-bcec-521721a7f1f3)
 
-
 ## Background
 
-This repository was originally based of [bhavin192'](https://github.com/infracloudio/cassandra-jaeger-tracing) plugin, 
+This repository was originally based of [bhavin192](https://github.com/infracloudio/cassandra-jaeger-tracing) plugin, 
 whichi originally worked with Cassandra 3, however since multiple revisions of Cassandra have changed the tracing API this solution became unusable.
 
-Since bhavin192 was reluctant to merge my pull requests, I've decided to take over the repository, rename it, and remove his code.
+Since bhavin192 has no time to maintain this repo. I've decided to take over the repository and rename it.
 
 ## Troubleshooting
 
@@ -75,11 +73,11 @@ This is because traces are stored within different tables than Cassandra expects
 an easy fix around this behaviour in cqlsh is to reduce
 `Session.max_trace_wait` down to 1 second.
 
-### Continuing parent :
-rT 
+### Continuing parent traces
+
 In order to continue a parent trace send the trace injected.
 into custom_payload with the _trace_id_key_. Default is `uber-trace-id`, but it can be changed through an environment variable.
-Inject it using HTTP_HEADERS TextMap codec with url encoding value of true.
+Inject it using TEXT_MAP TextMap codec with url encoding value of false.
 
 Refer to your Cassandra driver documentation in order
 to figure out how to send custom_payload.
@@ -87,3 +85,5 @@ to figure out how to send custom_payload.
 If you need a custom trace key, specify it in environment
 variable `JAEGER_TRACE_KEY`. Note that the default 
 is `uber-trace-id`.
+
+You will also need to set it for each and every Cassandra.
