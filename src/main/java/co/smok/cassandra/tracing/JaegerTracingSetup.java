@@ -26,7 +26,7 @@ final public class JaegerTracingSetup {
         Configuration.SenderConfiguration sender_cfg = Configuration.SenderConfiguration.fromEnv();
         final Configuration.ReporterConfiguration rc = Configuration.ReporterConfiguration.fromEnv().withSender(sender_cfg);
 
-        Configuration.CodecConfiguration codec_cfg = new Configuration.CodecConfiguration().withPropagation(Configuration.Propagation.JAEGER).withCodec(
+        Configuration.CodecConfiguration codec_cfg = new Configuration.CodecConfiguration().withCodec(
                 Format.Builtin.TEXT_MAP,
                 TextMapCodec.builder().withUrlEncoding(false)
                         .withSpanContextKey(trace_key)
