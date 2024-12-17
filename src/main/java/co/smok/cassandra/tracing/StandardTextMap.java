@@ -26,25 +26,56 @@ public class StandardTextMap implements TextMap {
             for (Map.Entry<String, ByteBuffer> entry : custom_payload.entrySet()) {
                 String key = entry.getKey();
                 String value = charset.decode(entry.getValue()).toString();
-                put(key, value);
+                this.put(key, value);
             }
         }
     }
 
+    public boolean isEmpty() {
+        return this.map.isEmpty();
+    }
 
-    protected static StandardTextMap copyFrom(Map<String, String> parameters) {
-        final StandardTextMap stm = new StandardTextMap();
-        for (Map.Entry<String, String> entry : parameters.entrySet()) {
-            stm.map.put(entry.getKey(), entry.getValue());
+    /**
+     * This will return null if given null
+     */
+    static protected StandardTextMap fromCustomPayload(Map<String, byte[]> custom_payload) {
+        if (custom_payload == null) {
+            return null;
+        }
+        StandardTextMap stm = new StandardTextMap();
+        for (Map.Entry<String, byte[]> entry : custom_payload.entrySet()) {
+            String key = entry.getKey();
+            String value = charset.decode(ByteBuffer.wrap(entry.getValue())).toString();
+            stm.put(key, value);
         }
         return stm;
     }
 
+    static final private char FUCKING_SEMICOLON = ':';
+    static private String filter(final String s) {
+        StringBuilder sb = new StringBuilder();
+        for (int i=0; i<s.length(); i++) {
+            if ((Character.digit(s.charAt(i), 16) > -1) || (s.charAt(i) == FUCKING_SEMICOLON)) {
+                sb.append(s.charAt(i));
+            }
+        }
+        return sb.toString();
+    }
 
-    public Map<String, ByteBuffer> toByteBuffer() {
-        final Map<String, ByteBuffer> my_map = new HashMap<>();
-        for (Map.Entry<String, String> entry : map.entrySet()) {
-            my_map.put(entry.getKey(), ByteBuffer.wrap(entry.getValue().getBytes(charset)));
+    protected static StandardTextMap copyFrom(Map<String, String> parameters) {
+        final StandardTextMap stm = new StandardTextMap();
+        for (Map.Entry<String, String> entry : parameters.entrySet()) {
+            stm.put(entry.getKey(), entry.getValue());
+        }
+        return stm;
+    }
+
+    public Map<String, byte[]> toBytes() {
+        final Map<String, byte[]> my_map = new HashMap<>();
+        for (Map.Entry<String, String> entry : this.map.entrySet()) {
+            String to_process = entry.getValue();
+            to_process = StandardTextMap.filter(to_process);
+            my_map.put(entry.getKey(), charset.encode(to_process).array());
         }
         return my_map;
     }
@@ -63,32 +94,22 @@ public class StandardTextMap implements TextMap {
     public String toString() {
         final StringBuilder sb = new StringBuilder();
         sb.append("StandardTextMap<");
-        for (Map.Entry<String, String> entry : map.entrySet()) {
+        for (Map.Entry<String, String> entry : this.map.entrySet()) {
             sb.append(entry.getKey());
             sb.append("=");
             sb.append(entry.getValue());
             sb.append(",");
         }
-        sb.deleteCharAt(sb.length() - 1);
+        sb.deleteCharAt(sb.length()-1);
         sb.append(">");
         return sb.toString();
     }
 
-    public byte[] getBytes(String s) {
-        logger.info("Getting bytes "+s);
-        String bytes = this.map.get(s);
-        if (bytes == null) {
-            return null;
-        }
-        return charset.encode(bytes).array();
-    }
-
-    public String get(String s) {
-        return this.map.get(s);
-    }
-
     @Override
     public void put(String s, String s1) {
-        map.put(s, s1);
+        if (s1 == null)  {
+            return;
+        }
+        map.put(s, StandardTextMap.filter(s1));
     }
 }

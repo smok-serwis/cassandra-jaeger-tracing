@@ -124,10 +124,10 @@ class JaegerTraceState extends TraceState {
             builder.addReference(References.FOLLOWS_FROM, this.span.context());
         }
 
-        final JaegerSpan span = builder.start();
-        analysis.applyTags(span);
-        span.finish();
-        this.span = span;
+        final JaegerSpan c_span = builder.start();
+        analysis.applyTags(c_span);
+        c_span.finish();
+        this.span = c_span;
         this.timestamp = clock.currentTimeMicros();
     }
 
@@ -156,11 +156,12 @@ class JaegerTraceState extends TraceState {
         this.refCount += 1;
     }
 
-    public synchronized void subRef() {
+    public synchronized boolean subRef() {
         this.refCount -= 1;
         if (this.refCount == 0) {
             this.notifyAll();
         }
+        return this.refCount == 0;
     }
 
     @Override
