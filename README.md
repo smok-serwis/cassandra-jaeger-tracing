@@ -2,6 +2,9 @@
 
 ![stability-wip](https://img.shields.io/badge/stability-work_in_progress-lightgrey.svg)
 
+**Note**: this repository is no longer maintained. To support latest Cassandra
+please visit [this repo](https://github.com/smok-serwis/cassandra-jaeger-tracing)
+
 **Update:** Works and tested with Cassandra 3.11.6!
 
 This plugin is based on [A Zipkin tracing plugin for
@@ -18,7 +21,7 @@ Cassandra's own internal tracing on to it.
 
 ## How to use
 - Make sure you have [Maven](https://maven.apache.org/) and
-  [JDK](https://openjdk.java.net/) installed on your machine
+  [JDK](https://openjdk.java.net/) installed on your machine/
 - Run following commands to build and place the jar
   ```sh
   # Cloning the repository
