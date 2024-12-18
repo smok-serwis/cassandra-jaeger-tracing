@@ -183,7 +183,7 @@ public final class JaegerTracing extends Tracing {
         if (message.traceSession() == null) {
             return;
         }
-        CommonTraceState t_s = get(message.header.customParams();
+        CommonTraceState t_s = get(message.traceSession());
         if (this.nullOrEmpty(t_s)){
             return;
         }
@@ -213,6 +213,13 @@ public final class JaegerTracing extends Tracing {
         TimeUUID sessionId = header.traceSession();
         if (sessionId == null) {
             return null;
+        }
+
+        if (header.verb.isResponse()) {
+            final StandardTextMap stm = StandardTextMap.fromCustomPayload(header.customParams());
+            if (stm != null) {
+                logger.warn("Coordinator received these" + stm.toString());
+            }
         }
 
         CommonTraceState state = get(sessionId);
