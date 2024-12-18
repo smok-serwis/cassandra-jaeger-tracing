@@ -24,6 +24,7 @@
         <id>piotrmaslanka</id>
         <name>Piotr Maślanka</name>
         <email>pmaslanka@smok.co</email>
+        <organization>SMOK sp. z o. o.</organization>
         <roles>
             <role>Current developer and current maintainer</role>
         </roles>
