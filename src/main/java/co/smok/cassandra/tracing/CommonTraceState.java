@@ -8,7 +8,7 @@ import org.apache.cassandra.utils.TimeUUID;
 
 abstract public class CommonTraceState extends TraceState {
     protected CommonTraceState(InetAddressAndPort coordinator, TimeUUID sessionId, Tracing.TraceType traceType) {
-        super(coordinator, sessionId, traceType);
+        super(coordinator, (sessionId == null) ? TimeUUID.Generator.nextTimeUUID() : sessionId, traceType);
     }
 
     abstract public boolean isEmpty();

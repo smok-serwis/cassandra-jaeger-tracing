@@ -28,12 +28,17 @@ final public class JaegerTracingSetup {
                 Format.Builtin.TEXT_MAP,
                 TextMapCodec.builder().withUrlEncoding(false)
                         .withSpanContextKey(trace_key)
-                        .build());
+                        .build()).withBinaryCodec(
+                Format.Builtin.BINARY,
+                BinaryCodec.builder().build());
 
         tracer = Configuration.fromEnv("c*:" + DatabaseDescriptor.getClusterName() + ":" + FBUtilities.getJustBroadcastAddress().getHostName())
                 .withCodec(codec_cfg)
                 .withReporter(rc)
                 .getTracer();
+
+        CloserThread ct = new CloserThread();
+        ct.start();
     }
 
 }

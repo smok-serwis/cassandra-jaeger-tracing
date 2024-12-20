@@ -48,23 +48,54 @@ public final class JaegerTracing extends Tracing {
 
     private static final Logger logger = LoggerFactory.getLogger(JaegerTracing.class);
 
+    /**
+     * This class has two purposes:
+     * 1. a replacement for Tracing.sessions more adequate to our needs
+     * 2. a routing table for responses to route them to correct JaegerTraceStates
+      */
+
     private static class SpanContextMap {
-        private Map<String, JaegerTraceState> map = new HashMap<>();
+        final private Map<String, JaegerTraceState> map = new HashMap<>();
+
+        private String contextToString(JaegerSpanContext context) {
+            return context.getTraceId()+":"+context.getSpanId();
+        }
 
         public void put(JaegerSpanContext context, JaegerTraceState jts) {
-            this.map.put(context.toString(), jts);
+            this.map.put(contextToString(context), jts);
+        }
+
+        public void put(JaegerTraceState state) {
+            this.map.put(contextToString(state.parentSpan.context()), state);
+        }
+
+        public void put(JaegerSpan span, JaegerTraceState jts) {
+            this.map.put(contextToString(span.context()), jts);
         }
 
         public JaegerTraceState get(JaegerSpanContext context) {
-            return this.map.get(context.toString());
+            return this.map.get(contextToString(context));
+        }
+
+        public JaegerTraceState pop(JaegerSpanContext context) {
+            String ctxt = contextToString(context);
+            JaegerTraceState state = this.map.get(ctxt);
+            this.map.remove(ctxt);
+            return state;
         }
 
         public void remove(JaegerSpanContext context) {
-            this.map.remove(context.toString());
+            this.map.remove(contextToString(context));
+        }
+        public void remove(JaegerSpan span) {
+            this.map.remove(contextToString(span.context()));
         }
     }
 
-    JaegerTracing.SpanContextMap my_map = new JaegerTracing.SpanContextMap();
+    // a replacement for Tracing.sessions - used to store all sessions, coordinator or replicas, but only those that we're responsible for
+    final private JaegerTracing.SpanContextMap my_map = new JaegerTracing.SpanContextMap();
+
+    final private JaegerTracing.SpanContextMap routing_table = new JaegerTracing.SpanContextMap();
 
     private static final InetAddressAndPort localHost = InetAddressAndPort.getLocalHost();
     /* a empty constructor is necessary for Cassandra to initialize this class **/
@@ -77,13 +108,6 @@ public final class JaegerTracing extends Tracing {
         return (CommonTraceState)ExecutorLocals.current().traceState;
     }
 
-    @Override
-    public CommonTraceState get(TimeUUID sessionId)
-    {
-        return (CommonTraceState)sessions.get(sessionId);
-    }
-
-
     /**
      * Stop the session processed by the current thread.
      * Everything was already done by our JaegerTraceState, including stopping the parent thread.
@@ -92,9 +116,19 @@ public final class JaegerTracing extends Tracing {
     protected void stopSessionImpl() {
     }
 
+    /**
+     * Register that a particular context should be mapped to this coordinator state
+     */
+    protected void registerRoutingTable(JaegerTraceState state, JaegerSpanContext context) {
+        this.routing_table.put(context, state);
+    }
 
     private boolean nullOrEmpty(CommonTraceState state) {
         return (state == null) || (state.isEmpty());
+    }
+
+    public CommonTraceState get(JaegerSpanContext context) {
+        return this.my_map.get(context);
     }
 
     @Override
@@ -110,8 +144,8 @@ public final class JaegerTracing extends Tracing {
         }
         JaegerTraceState jts = (JaegerTraceState)state;
         jts.stop();
-        sessions.remove(state.sessionId);
-        my_map.remove(jts.parentSpan.context());
+        my_map.remove(jts.parentSpan);
+        logger.warn("Stopping coordinator session "+jts.parentSpan.context());
         set(null);
     }
 
@@ -139,29 +173,35 @@ public final class JaegerTracing extends Tracing {
             state.parentSpan.setTag("client", client.toString());
         }
         logger.warn("Started a coordinator session with "+state.parentSpan.context().toString());
-        JaegerTracingSetup.tracer.activateSpan(state.parentSpan);
         return state;
     }
 
     @Override
-    /**
-     * This is called by the thread that holds the current state, so we can safely attach it.
-     */
+    // This is called only during tracing repairs, so it doesn't concern us
+    public TraceState get(TimeUUID uuid) {
+        return null;
+    }
+
+    @Override
+     // This is called by the thread that holds the current state, so we can safely attach it.
     public Map<ParamType, Object> addTraceHeaders(Map<ParamType, Object> addToMutable) {
         CommonTraceState ts = get();
         if (this.nullOrEmpty(ts)) {
             return addToMutable;
         }
         JaegerTraceState state = (JaegerTraceState)ts;
-        JaegerSpan span = state.span;
-        if (span == null) {
-            // Apparently that did not help one bit
-            throw new RuntimeException("Cannot attach trace headers when span is empty!");
+        JaegerTracing.BinaryExtractor be = new JaegerTracing.BinaryExtractor();
+        JaegerSpanContext context_to_attach = state.getContextToAttach();
+        JaegerTracingSetup.tracer.inject(context_to_attach, Format.Builtin.BINARY, be);
+
+        if (state.isCoordinator) {
+            logger.warn("I am a coordinator, my parentContext is "+state.parentSpan.context().toString()+" Im attaching "+context_to_attach.toString());
+            this.routing_table.put(state.getContextToAttach(), state);
+        } else {
+            logger.warn("I am a replica, Im attaching "+context_to_attach.toString());
         }
-        StandardTextMap stm = new StandardTextMap();
-        JaegerTracingSetup.tracer.inject(span.context(), Format.Builtin.TEXT_MAP, stm);
-        addToMutable.put(ParamType.CUSTOM_MAP, stm.toBytes());
-        addToMutable.put(ParamType.TRACE_SESSION, state.sessionId);
+
+        addToMutable.put(ParamType.CUSTOM_MAP, be.toCustomMap());
         return addToMutable;
     }
 
@@ -176,27 +216,12 @@ public final class JaegerTracing extends Tracing {
 
     @Override
     /**
-     * This is called by the replica when sending a message to coordinator, or by coordinator when sending to a replica
+     * This is called by the replica when sending a message to coordinator, or by coordinator when sending to a replica.
+     * But after headers have been attached
      */
     public void traceOutgoingMessage(Message<?> message, int serializedSize, InetAddressAndPort sendTo)
     {
-        if (message.traceSession() == null) {
-            return;
-        }
-        CommonTraceState t_s = get(message.traceSession());
-        if (this.nullOrEmpty(t_s)){
-            return;
-        }
-        JaegerTraceState jts = (JaegerTraceState)t_s;
-
-        jts.trace(String.format("Sending %s message to %s message size %s bytes", message.verb(), sendTo,
-                serializedSize));
-
-        if (message.verb().isResponse()) {
-            doneWithNonLocalSession(jts);
-        } else {
-            jts.addRef();
-        }
+        // We can't do much here, because we don't know who sent this message
     }
 
 
@@ -207,53 +232,32 @@ public final class JaegerTracing extends Tracing {
      * This is allowed to return a null, but not allowed to set a thread-local state
      */
     public TraceState initializeFromMessage(final Message.Header header) {
-        if (header.customParams() == null) {
+        final BinaryExtractor be = new JaegerTracing.BinaryExtractor(header.customParams());
+        if (be.isEmpty()) {
             return null;
         }
-        TimeUUID sessionId = header.traceSession();
-        if (sessionId == null) {
+        final JaegerSpanContext context = JaegerTracingSetup.tracer.extract(Format.Builtin.BINARY, be);
+        if (context == null) {
             return null;
         }
 
         if (header.verb.isResponse()) {
-            final StandardTextMap stm = StandardTextMap.fromCustomPayload(header.customParams());
-            if (stm != null) {
-                logger.warn("Coordinator received these" + stm.toString());
-            }
-        }
-
-        CommonTraceState state = get(sessionId);
-        if (state == null) {
-            // We haven't heard of that session before
-
-            if (header.verb.isResponse()) {
-                logger.info("Misplaced message");
+            // It's a response, let's go find the responsible JaegerTraceState for it
+            JaegerTraceState parent = this.routing_table.pop(context);
+            if (parent == null) {
+                logger.warn("Received an invalid response type "+header.verb.toString()+" for context "+context.toString());
                 return null;
             }
-
-            final StandardTextMap stm = StandardTextMap.fromCustomPayload(header.customParams());
-            if (stm == null) {
-                return null;
-            }
-
-            final JaegerSpanContext context = JaegerTracingSetup.tracer.extract(Format.Builtin.TEXT_MAP, stm);
-            if (context == null) {
-                return null;
-            }
-            TimeUUID newSessionId = TimeUUID.Generator.nextTimeUUID();
-            JaegerTracer.SpanBuilder builder = JaegerTracingSetup.tracer.buildSpan(header.traceType().toString())
-                    .asChildOf(context);
-            JaegerTraceState trace = JaegerTraceState.asFollower(header.from, newSessionId, header.traceType(), builder);
-            sessions.put(newSessionId, trace);
+            logger.warn("Received a response for parent "+parent.parentSpan.context().toString()+" replicas contexts was "+context.toString());
+            parent.responseReceived();
+            return parent;
+        } else {
+            // It's a command from the coordinator
+            // It's not a response, it's a command from a master
+            JaegerTraceState trace = JaegerTraceState.asFollower(header.from, header.traceType(), context);
+            my_map.put(trace);
             return trace;
-        }
-
-        JaegerTraceState jts = (JaegerTraceState)state;
-        if (header.verb.isResponse()) {
-            jts.subRef();
-            return jts;
-        }
-        return state;
+       }
     }
 
     @Override
@@ -272,15 +276,15 @@ public final class JaegerTracing extends Tracing {
         final StandardTextMap stm = new StandardTextMap(customPayload);
         TraceState traceState = null;
         if (stm.isEmpty()) {
-            traceState = new EmptyTraceState(localHost, sessionId, traceType);
+            traceState = new EmptyTraceState(localHost, traceType);
         } else {
             JaegerSpanContext context = JaegerTracingSetup.tracer.extract(Format.Builtin.TEXT_MAP, stm);
             if (context == null) {
-                traceState = new EmptyTraceState(localHost, sessionId, traceType);
+                traceState = new EmptyTraceState(localHost, traceType);
             } else {
-                JaegerTraceState jts = JaegerTraceState.asCoordinator(localHost, sessionId, traceType, context);
+                JaegerTraceState jts = JaegerTraceState.asCoordinator(localHost, traceType, context);
                 traceState = jts;
-                sessions.put(sessionId, jts);
+                my_map.put(jts);
             }
         }
 
@@ -298,9 +302,47 @@ public final class JaegerTracing extends Tracing {
         if (this.nullOrEmpty(cts)) {
             return;
         }
-
-        JaegerTraceState jts = (JaegerTraceState)state;
+        JaegerTraceState jts = (JaegerTraceState)cts;
         jts.stop();
-        sessions.remove(state.sessionId);
+        logger.warn("We are through with "+jts.parentSpan.context().toString());
+        my_map.remove(jts.parentSpan);
+    }
+
+    static private class BinaryExtractor implements Binary {
+
+        private ByteBuffer buffer = null;
+
+        public boolean isEmpty() {
+            return this.buffer == null;
+        }
+
+        public BinaryExtractor() {}
+
+        public BinaryExtractor(Map<String, byte[]> map) {
+            if (map == null) {
+                return;
+            }
+            if (!map.containsKey(JaegerTracingSetup.trace_key)) {
+                return;
+            }
+            this.buffer = ByteBuffer.wrap(map.get(JaegerTracingSetup.trace_key)).asReadOnlyBuffer();
+        }
+
+        @Override
+        public ByteBuffer extractionBuffer() {
+            return this.buffer;
+        }
+
+        @Override
+        public ByteBuffer injectionBuffer(int length) {
+            this.buffer = ByteBuffer.allocate(length);
+            return this.buffer;
+        }
+
+        public Map<String, byte[]> toCustomMap() {
+            Map<String, byte[]> map = new HashMap<>();
+            map.put(JaegerTracingSetup.trace_key, this.buffer.array());
+            return map;
+        }
     }
 }

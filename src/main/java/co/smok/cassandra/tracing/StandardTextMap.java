@@ -16,7 +16,7 @@ public class StandardTextMap implements TextMap {
     private static final Charset charset = StandardCharsets.UTF_8;
     private final Map<String, String> map = new HashMap<>();
 
-    private static final Logger logger = LoggerFactory.getLogger(JaegerTracing.class);
+    private static final Logger logger = LoggerFactory.getLogger(StandardTextMap.class);
 
     protected StandardTextMap() {
     }
@@ -36,11 +36,11 @@ public class StandardTextMap implements TextMap {
     }
 
     /**
-     * This will return null if given null
+     * This will return an empty map if given null
      */
     static protected StandardTextMap fromCustomPayload(Map<String, byte[]> custom_payload) {
         if (custom_payload == null) {
-            return null;
+            return new StandardTextMap();
         }
         StandardTextMap stm = new StandardTextMap();
         for (Map.Entry<String, byte[]> entry : custom_payload.entrySet()) {
@@ -52,11 +52,12 @@ public class StandardTextMap implements TextMap {
     }
 
     static final private char FUCKING_SEMICOLON = ':';
+    /** Because spurious spaces are inserted after the trace **/
     static private String filter(final String s) {
-        StringBuilder sb = new StringBuilder();
-        for (int i=0; i<s.length(); i++) {
-            if ((Character.digit(s.charAt(i), 16) > -1) || (s.charAt(i) == FUCKING_SEMICOLON)) {
-                sb.append(s.charAt(i));
+        StringBuilder sb = new StringBuilder(s.length());
+        for (char c: s.toCharArray()) {
+            if ((Character.digit(c, 16) != -1) || (c == FUCKING_SEMICOLON)) {
+                sb.append(c);
             }
         }
         return sb.toString();

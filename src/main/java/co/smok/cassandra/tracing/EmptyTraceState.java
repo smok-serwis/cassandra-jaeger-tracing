@@ -6,8 +6,8 @@ import org.apache.cassandra.utils.TimeUUID;
 
 public class EmptyTraceState extends CommonTraceState {
 
-    protected EmptyTraceState(InetAddressAndPort coordinator, TimeUUID sessionId, Tracing.TraceType traceType) {
-        super(coordinator, sessionId, traceType);
+    protected EmptyTraceState(InetAddressAndPort coordinator, Tracing.TraceType traceType) {
+        super(coordinator, null, traceType);
     }
 
     @Override
