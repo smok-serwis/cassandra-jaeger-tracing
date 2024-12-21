@@ -9,11 +9,6 @@
             <name>GitHub's Maven</name>
             <url>https://maven.pkg.github.com/smok-serwis/cassandra-jaeger-tracing</url>
         </repository>
-<!--        <repository>-->
-<!--            <id>maven</id>-->
-<!--            <name>Maven Central</name>-->
-<!--            <url>http://jarsm2.dyndns.dk</url>-->
-<!--        </repository>-->
     </distributionManagement>
     <groupId>co.smok.cassandra</groupId>
     <artifactId>cassandra-jaeger-tracing</artifactId>
@@ -26,7 +21,7 @@
         <email>pmaslanka@smok.co</email>
         <organization>SMOK sp. z o. o.</organization>
         <roles>
-            <role>Current developer and current maintainer</role>
+            <role>Lead developer and current maintainer</role>
         </roles>
         <properties>
             <github>piotrmaslanka</github>
@@ -38,10 +33,10 @@
             <name>Bhavin Gandhi</name>
             <email>bhavin7392@gmail.com</email>
             <roles>
-                <role>Initial developer</role>
+                <role>Initial developer (up to Cassandra 3)</role>
             </roles>
             <properties>
-                <github>pbhavin192</github>
+                <github>bhavin192</github>
             </properties>
         </developer>
     </developers>

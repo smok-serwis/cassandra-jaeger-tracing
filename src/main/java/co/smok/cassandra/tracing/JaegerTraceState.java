@@ -17,27 +17,18 @@
  */
 package co.smok.cassandra.tracing;
 
-import com.google.common.io.Closer;
 import io.jaegertracing.internal.JaegerSpan;
 import io.jaegertracing.internal.JaegerSpanContext;
 import io.jaegertracing.internal.JaegerTracer;
 import io.jaegertracing.internal.clock.Clock;
 import io.jaegertracing.internal.clock.SystemClock;
-import io.jaegertracing.internal.utils.Utils;
 import io.opentracing.References;
-import io.opentracing.Span;
 import org.apache.cassandra.locator.InetAddressAndPort;
-import org.apache.cassandra.tracing.TraceState;
 import org.apache.cassandra.tracing.Tracing;
-import org.apache.cassandra.utils.TimeUUID;
-import org.apache.cassandra.utils.progress.ProgressEvent;
-import org.apache.cassandra.utils.progress.ProgressListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Time;
 import java.time.Instant;
-import java.util.*;
 
 /**
  * Thread-local for a tracing session. Considers only a single node and a single trace at given time.
@@ -51,34 +42,14 @@ class JaegerTraceState extends CommonTraceState {
     public volatile long timestamp;
     private volatile int refCount = 0;
 
-
-    private String firstMessage = null;
     public JaegerSpan parentSpan = null;        // this is our private master span
     protected boolean isCoordinator;
     private JaegerSpanContext parentContext = null;
 
-    private static class ReferenceCounter {
-        final private Set<String> references = new HashSet<>();
-
-        public void addReference(JaegerSpanContext context) {
-            this.references.add(context.toString());
-        }
-
-        public int size() {
-            return this.references.size();
-        }
-
-        public void subReference(JaegerSpanContext context) {
-            this.references.remove(context.toString());
-        }
-    }
-
-    private ReferenceCounter refCounter = new ReferenceCounter();
-
     /**
      * Build a new JaegerTraceState in the role of a coordinator
+     *
      * @param context context that was provided by an external service
-     * @return
      */
     public static JaegerTraceState asCoordinator(InetAddressAndPort coordinator, Tracing.TraceType traceType,
                                                  JaegerSpanContext context) {
@@ -95,14 +66,13 @@ class JaegerTraceState extends CommonTraceState {
 
     /**
      * Activate the parent span
-      **/
+     **/
     public static JaegerTraceState asFollower(InetAddressAndPort coordinator, Tracing.TraceType traceType,
-                             JaegerSpanContext parentContext) {
+                                              JaegerSpanContext parentContext) {
         JaegerTraceState state = new JaegerTraceState(coordinator, traceType);
         state.parentSpan = JaegerTracingSetup.tracer.buildSpan(traceType.toString()).asChildOf(parentContext).withStartTimestamp(clock.currentTimeMicros()).start();
         state.parentContext = parentContext;
         state.isCoordinator = false;
-        CloserThread.instance.publish(state);
         return state;
     }
 
@@ -118,6 +88,7 @@ class JaegerTraceState extends CommonTraceState {
             return context;
         } else {
             // This means that the replica is going to reply and it better be a context span that coordinator gave us
+            this.stop();
             return this.parentContext;
         }
     }
@@ -128,8 +99,7 @@ class JaegerTraceState extends CommonTraceState {
     }
 
     @Override
-    public void trace(String message)
-    {
+    public void trace(String message) {
         this.traceImpl(message);
     }
 
@@ -152,8 +122,6 @@ class JaegerTraceState extends CommonTraceState {
         }
 
         final JaegerSpan c_span = builder.start();
-        c_span.setTag("trace", c_span.context().toTraceId());
-        c_span.setTag("parent", Utils.to16HexString(c_span.context().getParentId()));
         analysis.applyTags(c_span);
         c_span.finish();
         this.span = c_span;
@@ -163,7 +131,7 @@ class JaegerTraceState extends CommonTraceState {
     private long waitInterrupted(long period) {
         long microTimestamp = clock.currentTimeMicros();
         try {
-            synchronized(this) {
+            synchronized (this) {
                 this.wait(period);
             }
         } catch (InterruptedException e) {
@@ -177,10 +145,6 @@ class JaegerTraceState extends CommonTraceState {
         long timeToWait = TIME_TO_WAIT_FOR_RESPONSES_IN_MCS;
         boolean reported = false;
         while ((timeToWait > 0) && (this.refCount > 0)) {
-            if (!reported) {
-               logger.info("Coordinator session "+this.parentSpan.context().toString()+" waiting for children");
-               reported = true;
-            }
             timeToWait = waitInterrupted(timeToWait);
         }
     }
@@ -191,9 +155,6 @@ class JaegerTraceState extends CommonTraceState {
     }
 
     public void addRef() {
-        if (!this.isCoordinator) {
-            logger.warn("addRef() called on a non-coordinator");
-        }
         if (this.refCount == 0) {
             return;
         }
@@ -204,12 +165,9 @@ class JaegerTraceState extends CommonTraceState {
      * @return return if all follower traces were acccounted for
      */
     public boolean subRef() {
-        if (!this.isCoordinator) {
-            logger.warn("subRef() called on a non-coordinator");
-        }
         this.refCount -= 1;
         if (this.refCount == 0) {
-            synchronized(this) {
+            synchronized (this) {
                 this.notifyAll();
             }
         }
@@ -222,11 +180,6 @@ class JaegerTraceState extends CommonTraceState {
             this.waitForPendingEvents();
         }
         this.parentSpan.finish(clock.currentTimeMicros());
-        if (this.isCoordinator)  {
-            logger.warn("Stopped coordinator session "+this.parentSpan.context().toString());
-        } else {
-            logger.warn("Stopped follower session "+this.parentSpan.context().toString());
-        }
     }
 
     @Override

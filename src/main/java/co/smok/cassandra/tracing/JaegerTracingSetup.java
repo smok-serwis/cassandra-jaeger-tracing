@@ -6,7 +6,6 @@ import io.jaegertracing.internal.propagation.BinaryCodec;
 import io.jaegertracing.internal.propagation.TextMapCodec;
 import io.opentracing.propagation.Format;
 import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.utils.FBUtilities;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,8 +36,6 @@ final public class JaegerTracingSetup {
                 .withReporter(rc)
                 .getTracer();
 
-        CloserThread ct = new CloserThread();
-        ct.start();
     }
 
 }

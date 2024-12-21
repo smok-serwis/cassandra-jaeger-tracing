@@ -1,7 +1,8 @@
 ## v5.0.2
 
 * made to support Cassandra 5.0.2
-* intra-cassandra span transfers will be done using binary codec
+* intra-cassandra span transfers work and will be done using binary codec
+* got rid of CloserThread
 
 ## v4.1.1
 

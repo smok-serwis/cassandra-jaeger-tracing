@@ -35,50 +35,19 @@ public class StandardTextMap implements TextMap {
         return this.map.isEmpty();
     }
 
-    /**
-     * This will return an empty map if given null
-     */
-    static protected StandardTextMap fromCustomPayload(Map<String, byte[]> custom_payload) {
-        if (custom_payload == null) {
-            return new StandardTextMap();
-        }
-        StandardTextMap stm = new StandardTextMap();
-        for (Map.Entry<String, byte[]> entry : custom_payload.entrySet()) {
-            String key = entry.getKey();
-            String value = charset.decode(ByteBuffer.wrap(entry.getValue())).toString();
-            stm.put(key, value);
-        }
-        return stm;
-    }
-
     static final private char FUCKING_SEMICOLON = ':';
-    /** Because spurious spaces are inserted after the trace **/
+
+    /**
+     * Because spurious spaces are inserted after the trace
+     **/
     static private String filter(final String s) {
         StringBuilder sb = new StringBuilder(s.length());
-        for (char c: s.toCharArray()) {
+        for (char c : s.toCharArray()) {
             if ((Character.digit(c, 16) != -1) || (c == FUCKING_SEMICOLON)) {
                 sb.append(c);
             }
         }
         return sb.toString();
-    }
-
-    protected static StandardTextMap copyFrom(Map<String, String> parameters) {
-        final StandardTextMap stm = new StandardTextMap();
-        for (Map.Entry<String, String> entry : parameters.entrySet()) {
-            stm.put(entry.getKey(), entry.getValue());
-        }
-        return stm;
-    }
-
-    public Map<String, byte[]> toBytes() {
-        final Map<String, byte[]> my_map = new HashMap<>();
-        for (Map.Entry<String, String> entry : this.map.entrySet()) {
-            String to_process = entry.getValue();
-            to_process = StandardTextMap.filter(to_process);
-            my_map.put(entry.getKey(), charset.encode(to_process).array());
-        }
-        return my_map;
     }
 
     @Override
@@ -101,14 +70,14 @@ public class StandardTextMap implements TextMap {
             sb.append(entry.getValue());
             sb.append(",");
         }
-        sb.deleteCharAt(sb.length()-1);
+        sb.deleteCharAt(sb.length() - 1);
         sb.append(">");
         return sb.toString();
     }
 
     @Override
     public void put(String s, String s1) {
-        if (s1 == null)  {
+        if (s1 == null) {
             return;
         }
         map.put(s, StandardTextMap.filter(s1));
