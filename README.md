@@ -2,10 +2,9 @@
 
 This repository is a continuation of [https://github.com/infracloudio/cassandra-jaeger-tracing](https://github.com/infracloudio/cassandra-jaeger-tracing).
 
-Work is progressing on Cassandra 5.0.2.
+Work is progressing on Cassandra 5.0.2, but this is practically production-ready.
 
-Cassandra provides [pluggable
-tracing](https://web.archive.org/web/20160402125018/http://www.planetcassandra.org/blog/cassandra-3-4-release-overview/)
+Cassandra provides [pluggable tracing](https://web.archive.org/web/20160402125018/http://www.planetcassandra.org/blog/cassandra-3-4-release-overview/)
 starting from version 3.4. In versions 4 and 4.1 it was significantly altered, but the maintainers
 didn't tell us that. More changes were introduced by Cassandra 5. By adding a jar file to the Cassandra classpath and one JVM option, Cassandra's tracing can be
 replaced with Jaeger. It is meant to continue parent traces made by your microservices.
@@ -55,7 +54,7 @@ and TCP is needed to shop them.
 ## Background
 
 This repository was originally based of [bhavin192](https://github.com/infracloudio/cassandra-jaeger-tracing) plugin, 
-whichi originally worked with Cassandra 3, however since multiple revisions of Cassandra have changed the tracing API this solution became unusable.
+which originally worked with Cassandra 3, however since multiple revisions of Cassandra have changed the tracing API this solution became unusable.
 
 Since bhavin192 has no time to maintain this repo. I've decided to take over the repository and rename it.
 
