@@ -179,10 +179,8 @@ class JaegerTraceState extends CommonTraceState {
             this.waitForPendingEvents();
         }
         this.parentSpan.finish(clock.currentTimeMicros());
-        if (!this.isCoordinator) {
-            logger.info("Finished state of {}", this.parentContext);
-        }
-    }
+       }
+
 
     @Override
     public boolean isEmpty() {

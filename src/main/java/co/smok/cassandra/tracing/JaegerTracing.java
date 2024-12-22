@@ -168,7 +168,7 @@ public final class JaegerTracing extends Tracing {
 
         if (message.header.verb.isResponse()) {
             // This is a response. We need to locate the trace for it and notify it.
-            JaegerTraceState ts = this.my_map.get(context);
+            JaegerTraceState ts = this.my_map.pop(context);
             if (ts == null) {
                 logger.info("Tracing outgoing message for unknown context {}", context);
                 return;
@@ -176,9 +176,7 @@ public final class JaegerTracing extends Tracing {
             ts.trace("Sending {} message to {} message size {} bytes as response", message.header.verb.toString(),
                     sendTo.toString(), serializedSize);
             ts.stop();
-            this.my_map.remove(context);
         } else {
-            // Someone sent a request. Locate it, change the headers, and re-apply them.
             JaegerTraceState sender = this.routing_table.pop(context);
             sender.subRef();        // since previous call to getContextToAttach incremented it
             sender.trace("Sending {} message to {} message size {} bytes as request", message.header.verb.toString(),
