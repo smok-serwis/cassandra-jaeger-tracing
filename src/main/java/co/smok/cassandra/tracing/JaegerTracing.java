@@ -96,7 +96,7 @@ public final class JaegerTracing extends Tracing {
         state.parentSpan.setTag("request", request);
         String query = parameters.get("query");
         if (query != null) {
-            state.parentSpan.setTag("db.statement", client.toString());
+            state.parentSpan.setTag("db.statement", query);
         }
         if (client != null) {
             state.parentSpan.setTag("client", client.toString());
