@@ -23,7 +23,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /**
  * This class serves to identify common Cassandra trace messages,
@@ -32,6 +31,8 @@ import java.util.stream.Stream;
 public class RegexpSeparator {
 
     final static private SingleRegexp[] regexps = {
+            new SingleRegexp("Sending message", "Sending (?<type>.*) message to (?<othernode>.*) message size (?<bytes>\\d+) bytes as (?<role>.*)",
+                    new String[]{"othernode", "bytes", "type", "role"}),
             new SingleRegexp("Partition index found", "Partition index found for sstable (?<sstableid>\\d+), size = (?<size>\\d+)",
                     new String[]{"sstableid", "size"}),
             new SingleRegexp("Key cache hit",
@@ -55,10 +56,10 @@ public class RegexpSeparator {
             new SingleRegexp("Enqueuing response",
                     "Enqueuing response to (?<othernode>.*)",
                     new String[]{"othernode"}),
-            new SingleRegexp("Sending response",
+            new SingleRegexp("Sending message",
                     "Sending (?<type>.*) message to (?<othernode>.*)",
                     new String[]{"othernode", "type"}),
-            new SingleRegexp("Response received",
+            new SingleRegexp("Message received",
                     "(?<type>.*) message received from (?<othernode>.*)",
                     new String[]{"othernode", "type"}),
             new SingleRegexp("Sending message",
@@ -97,27 +98,28 @@ public class RegexpSeparator {
             new SingleRegexp("Read-repair",
                     "Read-repair (?<consistency>.*)",
                     new String[]{"consistency"}),
-            new SingleRegexp("Preparing",
-                    "Preparing (?<paxosid>.*)",
-                    new String[]{"paxosid"}),
-            new SingleRegexp("Promising ballot",
-                    "Promising ballot (?<paxosid>.*)",
-                    new String[]{"paxosid"}),
-            new SingleRegexp("Sending message", "Sending (?<type>.*) message to (?<othernode>.*) message size (?<bytes>\\d+) bytes", new String[]{"othernode", "bytes", "type"}),
-            new SingleRegexp("Message received", "(?<type>.*) message received from (?<othernode>.*)", new String[]{"othernode", "type"}),
-            new SingleRegexp("Key cache hit", "Key cache hit for ssstable (?<sstable>\\d+), size = (?<size>\\d+)", new String[]{"sstable", "size"}),
+            new SingleRegexp("Preparing","Preparing (?<paxosid>.*)", new String[]{"paxosid"}),
+            new SingleRegexp("Promising ballot","Promising ballot (?<paxosid>.*)", new String[]{"paxosid"}),
+            new SingleRegexp("Message received", "(?<type>.*) message received from (?<othernode>.*)",
+                    new String[]{"othernode", "type"}),
+            new SingleRegexp("Key cache hit", "Key cache hit for ssstable (?<sstable>\\d+), size = (?<size>\\d+)",
+                    new String[]{"sstable", "size"}),
             new SingleRegexp("Enqueuing full request", "Enqueuing request to Full\\((?<othernode>.*),\\((?<start>-?\\d+),(?<stop>-?\\d+)]\\)",
-                     new String[]{"othernode", "start", "stop"}),
+                    new String[]{"othernode", "start", "stop"}),
             new MultiRegexp("Index mean cardinalities", "Index mean cardinalities are (?<indexesestimates>.*). Scanning with (?<indexes>.*).",
-                    new String[]{"indexesestimates", "indexes"}, new String[]{"indexesestimates", "indexes"}, new String[]{"index_estimate", "index"}),
-            new SingleRegexp("Executing read using an index", "Executing read on (?<keyspace>.*)\\.(?<table>.*) using index (?<index>.*)", new String[]{"index", "table", "keyspace"}),
+                    new String[]{"indexesestimates", "indexes"}, new String[]{"indexesestimates", "indexes"},
+                    new String[]{"index_estimate", "index"}),
+            new SingleRegexp("Executing read using an index", "Executing read on (?<keyspace>.*)\\.(?<table>.*) using index (?<index>.*)",
+                    new String[]{"index", "table", "keyspace"}),
             new SingleRegexp("Executing seq scan", "Executing seq scan across (?<sstablecount>\\d+) sstables for \\(min\\((?<start>-?\\d+)\\), min\\((?<stop>-?\\d+)\\)]",
-                    new String[]{"sstablecount","start","stop"}),
-            new SingleRegexp("Submitted concurrent range requests", "Submitted (?<amount>\\d+) concurrent range requests", new String[]{"amount"}),
-            new SingleRegexp("Submitted range requests with a concurrency",
+                    new String[]{"sstablecount", "start", "stop"}),
+            new SingleRegexp("Submitted concurrent range requests", "Submitted (?<amount>\\d+) concurrent range requests",
+                    new String[]{"amount"}),
+            new SingleRegexp("Submitting range requests with a concurrency",
                     "Submitting range requests on (?<noranges>\\d+) ranges with a concurrency of (?<concurrency>\\d+) \\((?<rowsperrange>[0-9]*\\.?[0-9]*) rows per range expected\\)",
                     new String[]{"noranges", "concurrency", "rowsperrange"}),
-            new SingleRegexp("Timed out", "Timed out; received (?<received>\\d+) of (?<expected>\\d+) responses", new String[]{"received", "expected"})
+            new SingleRegexp("Timed out", "Timed out; received (?<received>\\d+) of (?<expected>\\d+) responses",
+                    new String[]{"received", "expected"})
     };
 
     static public AnalysisResult match(String trace) {
