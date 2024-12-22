@@ -82,6 +82,7 @@ class JaegerTraceState extends CommonTraceState {
 
     /**
      * Returns a context to be attached to message sent somewhere.
+     * Call it once per message.
      * WARNING! This method is NOT idempotent!
      */
     protected JaegerSpanContext getContextToAttach() {

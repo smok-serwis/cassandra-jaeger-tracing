@@ -23,7 +23,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /**
  * This class serves to identify common Cassandra trace messages,
@@ -107,12 +106,12 @@ public class RegexpSeparator {
             new SingleRegexp("Message received", "(?<type>.*) message received from (?<othernode>.*)", new String[]{"othernode", "type"}),
             new SingleRegexp("Key cache hit", "Key cache hit for ssstable (?<sstable>\\d+), size = (?<size>\\d+)", new String[]{"sstable", "size"}),
             new SingleRegexp("Enqueuing full request", "Enqueuing request to Full\\((?<othernode>.*),\\((?<start>-?\\d+),(?<stop>-?\\d+)]\\)",
-                     new String[]{"othernode", "start", "stop"}),
+                    new String[]{"othernode", "start", "stop"}),
             new MultiRegexp("Index mean cardinalities", "Index mean cardinalities are (?<indexesestimates>.*). Scanning with (?<indexes>.*).",
                     new String[]{"indexesestimates", "indexes"}, new String[]{"indexesestimates", "indexes"}, new String[]{"index_estimate", "index"}),
             new SingleRegexp("Executing read using an index", "Executing read on (?<keyspace>.*)\\.(?<table>.*) using index (?<index>.*)", new String[]{"index", "table", "keyspace"}),
             new SingleRegexp("Executing seq scan", "Executing seq scan across (?<sstablecount>\\d+) sstables for \\(min\\((?<start>-?\\d+)\\), min\\((?<stop>-?\\d+)\\)]",
-                    new String[]{"sstablecount","start","stop"}),
+                    new String[]{"sstablecount", "start", "stop"}),
             new SingleRegexp("Submitted concurrent range requests", "Submitted (?<amount>\\d+) concurrent range requests", new String[]{"amount"}),
             new SingleRegexp("Submitted range requests with a concurrency",
                     "Submitting range requests on (?<noranges>\\d+) ranges with a concurrency of (?<concurrency>\\d+) \\((?<rowsperrange>[0-9]*\\.?[0-9]*) rows per range expected\\)",

@@ -21,10 +21,6 @@ public class SpanContextMap {
         this.map.put(contextToString(state.parentSpan.context()), state);
     }
 
-    public void put(JaegerSpan span, JaegerTraceState jts) {
-        this.map.put(contextToString(span.context()), jts);
-    }
-
     public JaegerTraceState get(JaegerSpanContext context) {
         return this.map.get(contextToString(context));
     }
