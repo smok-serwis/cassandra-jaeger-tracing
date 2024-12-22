@@ -32,9 +32,11 @@ import java.util.stream.Stream;
 public class RegexpSeparator {
 
     final static private SingleRegexp[] regexps = {
+            new SingleRegexp("Partition index found", "Partition index found for sstable (?<sstableid>\\d+), size = (?<size>\\d+)",
+                    new String[]{"sstableid", "size"}),
             new SingleRegexp("Key cache hit",
-                    "Key cache hit for sstable (?<sstableid>\\d+)",
-                    new String[]{"sstableid"}),
+                    "Key cache hit for sstable (?<sstableid>\\d+), size = (?<size>\\d+)",
+                    new String[]{"sstableid", "size"}),
             new SingleRegexp("Parsing query",
                     "Parsing (?<query>.*)",
                     new String[]{"query"}),
@@ -106,7 +108,7 @@ public class RegexpSeparator {
             new SingleRegexp("Key cache hit", "Key cache hit for ssstable (?<sstable>\\d+), size = (?<size>\\d+)", new String[]{"sstable", "size"}),
             new SingleRegexp("Enqueuing full request", "Enqueuing request to Full\\((?<othernode>.*),\\((?<start>-?\\d+),(?<stop>-?\\d+)]\\)",
                      new String[]{"othernode", "start", "stop"}),
-            new MultiRegexp("", "Index mean cardinalities are (?<indexesestimates>.*). Scanning with (?<indexes>.*).",
+            new MultiRegexp("Index mean cardinalities", "Index mean cardinalities are (?<indexesestimates>.*). Scanning with (?<indexes>.*).",
                     new String[]{"indexesestimates", "indexes"}, new String[]{"indexesestimates", "indexes"}, new String[]{"index_estimate", "index"}),
             new SingleRegexp("Executing read using an index", "Executing read on (?<keyspace>.*)\\.(?<table>.*) using index (?<index>.*)", new String[]{"index", "table", "keyspace"}),
             new SingleRegexp("Executing seq scan", "Executing seq scan across (?<sstablecount>\\d+) sstables for \\(min\\((?<start>-?\\d+)\\), min\\((?<stop>-?\\d+)\\)]",
