@@ -142,7 +142,6 @@ class JaegerTraceState extends CommonTraceState {
     @Override
     protected void waitForPendingEvents() {
         long timeToWait = TIME_TO_WAIT_FOR_RESPONSES_IN_MCS;
-        boolean reported = false;
         while ((timeToWait > 0) && (this.refCount > 0)) {
             timeToWait = waitInterrupted(timeToWait);
         }
@@ -177,6 +176,8 @@ class JaegerTraceState extends CommonTraceState {
     public void stop() {
         if (this.isCoordinator) {
             this.waitForPendingEvents();
+        } else {
+            JaegerTracing.instance.remove(jts.parentSpan);
         }
         this.parentSpan.finish(clock.currentTimeMicros());
     }

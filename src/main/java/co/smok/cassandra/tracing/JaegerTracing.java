@@ -178,7 +178,7 @@ public final class JaegerTracing extends Tracing {
             // It's a command from the coordinator
             // It's not a response, it's a command from a master
             JaegerTraceState trace = JaegerTraceState.asFollower(header.from, header.traceType(), context);
-            my_map.put(trace);
+            this.my_map.put(trace);
             return trace;
         }
     }
