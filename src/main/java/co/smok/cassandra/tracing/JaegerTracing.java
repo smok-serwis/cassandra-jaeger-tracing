@@ -130,7 +130,7 @@ public final class JaegerTracing extends Tracing {
             return addToMutable;
         }
         JaegerTraceState state = (JaegerTraceState) ts;
-        JaegerSpanContext context_to_attach = state.getContextToAttach();
+        JaegerSpanContext context_to_attach = state.generateContextToAttach();
 
         if (state.isCoordinator) {
             this.routing_table.put(context_to_attach, state);
@@ -150,7 +150,15 @@ public final class JaegerTracing extends Tracing {
     @Override
     /**
      * This is called by the replica when sending a message to coordinator, or by coordinator when sending to a replica.
-     * But after headers have been attached
+     * But after headers have been attached.
+     *
+     * This will:
+     * 1. If it's a request, then it's our last chance to register some info about it. So we:
+     *      1. Extract the context from the header
+     *      2. Grab the respective trace session from routing table
+     *      3. Trace the message. The context will now change.
+     *      4. Re-register the new context as attached to this trace
+     * 2. If it's a response, then it's our final chance to close it for good.
      */
     public void traceOutgoingMessage(Message<?> message, int serializedSize, InetAddressAndPort sendTo) {
         final JaegerSpanContext context = this.getContextFromHeader(message.header);
@@ -159,23 +167,25 @@ public final class JaegerTracing extends Tracing {
         }
 
         if (message.header.verb.isResponse()) {
-            // This is a response. We need to locate the parent span for it and notify it.
+            // This is a response. We need to locate the trace for it and notify it.
             JaegerTraceState ts = this.my_map.get(context);
             if (ts == null) {
                 logger.info("Tracing outgoing message for unknown context {}", context);
                 return;
             }
-            ts.trace("Sending {} message to {} message size {} bytes", message.header.verb.toString(),
+            ts.trace("Sending {} message to {} message size {} bytes as response", message.header.verb.toString(),
                     sendTo.toString(), serializedSize);
+            ts.stop();
+            this.my_map.remove(context);
         } else {
             // Someone sent a request. Locate it, change the headers, and re-apply them.
             JaegerTraceState sender = this.routing_table.pop(context);
-            sender.subRef();
-            sender.trace("Sending {} message to {} message size {} bytes", message.header.verb.toString(),
+            sender.subRef();        // since previous call to getContextToAttach incremented it
+            sender.trace("Sending {} message to {} message size {} bytes as request", message.header.verb.toString(),
                     sendTo.toString(), serializedSize);
 
             Map<String, byte[]> customParams = message.header.customParams();
-            JaegerSpanContext new_context = sender.getContextToAttach();
+            JaegerSpanContext new_context = sender.generateContextToAttach();
             addContextToMap(new_context, customParams);
             this.routing_table.put(new_context, sender);
         }
@@ -214,7 +224,7 @@ public final class JaegerTracing extends Tracing {
             // It's a command from the coordinator
             // It's not a response, it's a command from a master
             JaegerTraceState trace = JaegerTraceState.asFollower(header.from, header.traceType(), context);
-            my_map.put(trace);
+            this.my_map.put(context, trace);
             return trace;
         }
     }
@@ -242,7 +252,7 @@ public final class JaegerTracing extends Tracing {
             } else {
                 JaegerTraceState jts = JaegerTraceState.asCoordinator(localHost, traceType, context);
                 traceState = jts;
-                my_map.put(jts);
+                this.my_map.put(jts);
             }
         }
 
