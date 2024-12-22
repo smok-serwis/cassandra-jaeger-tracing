@@ -177,8 +177,6 @@ class JaegerTraceState extends CommonTraceState {
     public void stop() {
         if (this.isCoordinator) {
             this.waitForPendingEvents();
-        } else {
-            JaegerTracing.instance.remove(jts.parentSpan);
         }
         this.parentSpan.finish(clock.currentTimeMicros());
        }
