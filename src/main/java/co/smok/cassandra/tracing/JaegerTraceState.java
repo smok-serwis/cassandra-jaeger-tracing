@@ -40,11 +40,15 @@ class JaegerTraceState extends CommonTraceState {
 
     public JaegerSpan span = null;
     public volatile long timestamp;
-    private volatile int refCount = 0;
-
     public JaegerSpan parentSpan = null;        // this is our private master span
     protected boolean isCoordinator;
+    private volatile int refCount = 0;
     private JaegerSpanContext parentContext = null;
+
+    private JaegerTraceState(InetAddressAndPort coordinator, Tracing.TraceType traceType) {
+        super(coordinator, null, traceType);
+        this.timestamp = clock.currentTimeMicros();
+    }
 
     /**
      * Build a new JaegerTraceState in the role of a coordinator
@@ -91,11 +95,6 @@ class JaegerTraceState extends CommonTraceState {
             this.stop();
             return this.parentContext;
         }
-    }
-
-    private JaegerTraceState(InetAddressAndPort coordinator, Tracing.TraceType traceType) {
-        super(coordinator, null, traceType);
-        this.timestamp = clock.currentTimeMicros();
     }
 
     @Override

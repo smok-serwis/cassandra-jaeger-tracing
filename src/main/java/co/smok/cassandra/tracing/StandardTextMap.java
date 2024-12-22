@@ -14,9 +14,9 @@ import java.util.Map;
 
 public class StandardTextMap implements TextMap {
     private static final Charset charset = StandardCharsets.UTF_8;
-    private final Map<String, String> map = new HashMap<>();
-
     private static final Logger logger = LoggerFactory.getLogger(StandardTextMap.class);
+    static final private char FUCKING_SEMICOLON = ':';
+    private final Map<String, String> map = new HashMap<>();
 
     protected StandardTextMap() {
     }
@@ -31,12 +31,6 @@ public class StandardTextMap implements TextMap {
         }
     }
 
-    public boolean isEmpty() {
-        return this.map.isEmpty();
-    }
-
-    static final private char FUCKING_SEMICOLON = ':';
-
     /**
      * Because spurious spaces are inserted after the trace
      **/
@@ -48,6 +42,10 @@ public class StandardTextMap implements TextMap {
             }
         }
         return sb.toString();
+    }
+
+    public boolean isEmpty() {
+        return this.map.isEmpty();
     }
 
     @Override

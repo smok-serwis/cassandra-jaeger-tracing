@@ -19,8 +19,11 @@ package co.smok.cassandra.tracing;
 
 import io.opentracing.Span;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * This class serves to identify common Cassandra trace messages,
@@ -47,21 +50,21 @@ public class RegexpSeparator {
             new SingleRegexp("Skipped non-slice-intersecting sstables",
                     "Skipped (?<sstables>\\d+/\\d+) non-slice-intersecting sstables, included (?<tombstones>\\d+) due to tombstones",
                     new String[]{"sstables", "tombstones"}),
-            new SingleRegexp("Received READ message",
-                    "READ message received from (?<othernode>.*)",
-                    new String[]{"othernode"}),
             new SingleRegexp("Enqueuing response",
                     "Enqueuing response to (?<othernode>.*)",
                     new String[]{"othernode"}),
             new SingleRegexp("Sending response",
-                    "Sending REQUEST_RESPONSE message to (?<othernode>.*)",
-                    new String[]{"othernode"}),
-            new SingleRegexp("REQUEST_RESPONSE message received",
-                    "REQUEST_RESPONSE message received from (?<othernode>.*)",
-                    new String[]{"othernode"}),
-            new SingleRegexp("Sending READ message",
-                    "Sending READ message to (?<othernode>.*)",
-                    new String[]{"othernode"}),
+                    "Sending (?<type>.*) message to (?<othernode>.*)",
+                    new String[]{"othernode", "type"}),
+            new SingleRegexp("Response received",
+                    "(?<type>.*) message received from (?<othernode>.*)",
+                    new String[]{"othernode", "type"}),
+            new SingleRegexp("Sending message",
+                    "Sending (?<type>.*) message to (?<othernode>.*)",
+                    new String[]{"othernode", "type"}),
+            new SingleRegexp("Received message",
+                    "(?<type>.*) message received from (?<othernode>.*)",
+                    new String[]{"othernode", "type"}),
             new SingleRegexp("Scanned rows and matched ",
                     "Scanned (?<rows>\\d+) rows and matched (?<matched>\\d+)",
                     new String[]{"rows", "matched"}),
@@ -83,15 +86,9 @@ public class RegexpSeparator {
             new SingleRegexp("Executing single-partition query",
                     "Executing single-partition query on (?<table>.*)",
                     new String[]{"table"}),
-            new SingleRegexp("Sending MUTATION message",
-                    "Sending MUTATION message to (?<othernode>.*)",
-                    new String[]{"othernode"}),
             new SingleRegexp("Adding to memtable",
                     "Adding to (?<table>.*) memtable",
                     new String[]{"table"}),
-            new SingleRegexp("Received MUTATION message",
-                    "MUTATION message received from (?<othernode>.*)",
-                    new String[]{"othernode"}),
             new SingleRegexp("Reading digest",
                     "reading digest from (?<othernode>.*)",
                     new String[]{"othernode"}),
@@ -104,28 +101,19 @@ public class RegexpSeparator {
             new SingleRegexp("Promising ballot",
                     "Promising ballot (?<paxosid>.*)",
                     new String[]{"paxosid"}),
-            new SingleRegexp("Sending PAXOS_PREPARE message",
-                    "Sending PAXOS_PREPARE message to (?<othernode>.*)",
-                    new String[]{"othernode"}),
-            new SingleRegexp("PAXOS_PREPARE message received",
-                    "PAXOS_PREPARE message received from (?<othernode>.*)",
-                    new String[]{"othernode"}),
-            new SingleRegexp("Sending PAXOS_PROPOSE message",
-                    "Sending PAXOS_PROPOSE message to (?<othernode>.*)",
-                    new String[]{"othernode"}),
-            new SingleRegexp("PAXOS_PROPOSE message received",
-                    "PAXOS_PROPOSE message received from (?<othernode>.*)",
-                    new String[]{"othernode"}),
-            new SingleRegexp("Sending MUTATION_REQ",
-                    "Sending MUTATION_REQ message to (?<othernode>.*) message size (?<bytes>\\d+) bytes", new String[]{"othernode", "bytes"}),
-            new SingleRegexp("MUTATION_RSP message received",
-                    "MUTATION_RSP message received from (?<othernode>.*)", new String[]{"othernode"}),
-            new SingleRegexp("READ_RSP message received",
-                    "READ_RSP message received from (?<othernode>.*)", new String[]{"othernode"}),
-            new SingleRegexp("Sending READ_REQ message", "Sending READ_REQ message to (?<othernode>.*) message size (?<bytes>\\d+) bytes", new String[]{"othernode", "bytes"}),
-            new SingleRegexp("READ_REQ message received", "READ_REQ message received from (?<othernode>.*)", new String[]{"othernode"}),
+            new SingleRegexp("Sending message", "Sending (?<type>.*) message to (?<othernode>.*) message size (?<bytes>\\d+) bytes", new String[]{"othernode", "bytes", "type"}),
+            new SingleRegexp("Message received", "(?<type>.*) message received from (?<othernode>.*)", new String[]{"othernode", "type"}),
             new SingleRegexp("Key cache hit", "Key cache hit for ssstable (?<sstable>\\d+), size = (?<size>\\d+)", new String[]{"sstable", "size"}),
-
+            new SingleRegexp("Enqueuing full request", "Enqueuing request to Full\\((?<othernode>.*),\\((?<start>-?\\d+),(?<stop>-?\\d+)]\\)",
+                     new String[]{"othernode", "start", "stop"}),
+            new MultiRegexp("", "Index mean cardinalities are (?<indexesestimates>.*). Scanning with (?<indexes>.*).",
+                    new String[]{"indexesestimates", "indexes"}, new String[]{"indexesestimates", "indexes"}, new String[]{"index_estimate", "index"}),
+            new SingleRegexp("Executing read using an index", "Executing read on (?<keyspace>.*)\\.(?<table>.*) using index (?<index>.*)", new String[]{"index", "table", "keyspace"}),
+            new SingleRegexp("Submitted concurrent range requests", "Submitted (?<amount>\\d+) concurrent range requests", new String[]{"amount"}),
+            new SingleRegexp("Submitted range requests with a concurrency",
+                    "Submitting range requests on (?<noranges>\\d+) ranges with a concurrency of (?<concurrency>\\d+) \\((?<rowsperrange>[0-9]*\\.?[0-9]*) rows per range expected\\)",
+                    new String[]{"noranges", "concurrency", "rowsperrange"}),
+            new SingleRegexp("Timed out", "Timed out; received (?<received>\\d+) of (?<expected>\\d+) responses", new String[]{"received", "expected"})
     };
 
     static public AnalysisResult match(String trace) {
@@ -154,7 +142,7 @@ public class RegexpSeparator {
     private static class NoMatch extends AnalysisResult {
         final private String trace;
 
-        private NoMatch(String trace) {
+        private NoMatch(final String trace) {
             this.trace = trace;
         }
 
@@ -175,13 +163,32 @@ public class RegexpSeparator {
 
         @Override
         public String getTraceName() {
-            return srp.label;
+            return this.srp.label;
         }
 
         @Override
         public void applyTags(Span span) {
-            for (final String groupName : srp.namedGroups) {
-                span.setTag(groupName, match.group(groupName));
+            if (this.srp instanceof MultiRegexp) {
+                final MultiRegexp mrp = (MultiRegexp) this.srp;
+                for (final String groupName : srp.namedGroups) {
+                    // Check if it's a group that we should split
+                    if (mrp.namedGroupsToSplit.contains(groupName)) {
+                        int index = mrp.namedGroupsToSplit.indexOf(groupName);
+                        String[] values = match.group(groupName).split(mrp.splitWith);
+                        if (values.length > 1) {
+                            final String tagNamePrefix = mrp.tagsNamePrefix[index];
+                            for (int i = 0; i < values.length; i++) {
+                                span.setTag(tagNamePrefix + "." + i, values[i]);
+                            }
+                        } else {
+                            span.setTag(groupName, match.group(groupName));
+                        }
+                    }
+                }
+            } else {
+                for (final String groupName : srp.namedGroups) {
+                    span.setTag(groupName, match.group(groupName));
+                }
             }
         }
     }
@@ -193,14 +200,32 @@ public class RegexpSeparator {
         // names of the groups from the matcher
         final private String[] namedGroups;
 
-        private SingleRegexp(String label, String regexp, String[] namedGroups) {
+        private SingleRegexp(final String label, final String regexp, final String[] namedGroups) {
             this.pattern = Pattern.compile(regexp);
             this.label = label;
             this.namedGroups = namedGroups;
         }
 
-        private Matcher match(String trace) {
-            return pattern.matcher(trace);
+        private Matcher match(final String trace) {
+            return this.pattern.matcher(trace);
         }
     }
+
+    /**
+     * A regexp that can return an arbitrary number of tags
+     */
+    private static class MultiRegexp extends SingleRegexp {
+
+        final private List<String> namedGroupsToSplit;
+        final private String splitWith = ",";
+        final private String[] tagsNamePrefix;
+
+        private MultiRegexp(final String label, final String regexp, final String[] namedGroups, final String[] namedGroupsToSplit,
+                            final String[] tagsNamePrefix) {
+            super(label, regexp, namedGroups);
+            this.namedGroupsToSplit = Arrays.asList(namedGroupsToSplit);
+            this.tagsNamePrefix = tagsNamePrefix;
+        }
+    }
+
 }

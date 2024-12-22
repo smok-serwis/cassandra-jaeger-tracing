@@ -1,8 +1,6 @@
 package co.smok.cassandra.tracing;
 
-import io.jaegertracing.internal.JaegerSpan;
 import io.jaegertracing.internal.JaegerSpanContext;
-import io.opentracing.propagation.Binary;
 import io.opentracing.propagation.Format;
 import org.apache.cassandra.concurrent.ExecutorLocals;
 import org.apache.cassandra.locator.InetAddressAndPort;
@@ -16,7 +14,6 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -29,10 +26,10 @@ import java.util.Map;
  * There is only one instance of this class, and it serves as a factory for TraceStates
  */
 public final class JaegerTracing extends Tracing {
-    protected static final JaegerTracingSetup setup = new JaegerTracingSetup();
+    private static final JaegerTracingSetup setup = new JaegerTracingSetup();
 
     private static final Logger logger = LoggerFactory.getLogger(JaegerTracing.class);
-
+    private static final InetAddressAndPort localHost = InetAddressAndPort.getLocalHost();
     /**
      * This class has two purposes:
      * 1. a replacement for Tracing.sessions more adequate to our needs
@@ -44,8 +41,6 @@ public final class JaegerTracing extends Tracing {
     final private SpanContextMap my_map = new SpanContextMap();
     // sub-spans of coordinator's parent span may issue requests of their own, we need to track them
     final private SpanContextMap routing_table = new SpanContextMap();
-
-    private static final InetAddressAndPort localHost = InetAddressAndPort.getLocalHost();
 
     /* a empty constructor is necessary for Cassandra to initialize this class **/
     public JaegerTracing() {
@@ -148,9 +143,11 @@ public final class JaegerTracing extends Tracing {
      * But after headers have been attached
      */
     public void traceOutgoingMessage(Message<?> message, int serializedSize, InetAddressAndPort sendTo) {
-        // We can't do much here, because we don't know who sent this message
+        CommonTraceState cts = get();
+        if (!this.nullOrEmpty(cts)) {
+            cts.trace("Sending {} message to {} message size {} bytes", message.header.verb.toString());
+        }
     }
-
 
     @Override
     /**
@@ -172,7 +169,7 @@ public final class JaegerTracing extends Tracing {
             // It's a response, let's go find the responsible JaegerTraceState for it
             JaegerTraceState parent = this.routing_table.pop(context);
             if (parent == null) {
-                logger.info("Received a timeouted replica for context " + context.toString());
+                logger.info("Received a timeouted replica for context " + context);
                 return null;
             }
             parent.responseReceived();
