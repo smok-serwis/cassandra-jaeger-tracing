@@ -1,8 +1,6 @@
 package co.smok.cassandra.tracing;
 
 import io.opentracing.propagation.TextMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -14,9 +12,8 @@ import java.util.Map;
 
 public class StandardTextMap implements TextMap {
     private static final Charset charset = StandardCharsets.UTF_8;
+    static final private char FUCKING_SEMICOLON = ':';
     private final Map<String, String> map = new HashMap<>();
-
-    private static final Logger logger = LoggerFactory.getLogger(StandardTextMap.class);
 
     protected StandardTextMap() {
     }
@@ -31,12 +28,6 @@ public class StandardTextMap implements TextMap {
         }
     }
 
-    public boolean isEmpty() {
-        return this.map.isEmpty();
-    }
-
-    static final private char FUCKING_SEMICOLON = ':';
-
     /**
      * Because spurious spaces are inserted after the trace
      **/
@@ -50,9 +41,13 @@ public class StandardTextMap implements TextMap {
         return sb.toString();
     }
 
+    public boolean isEmpty() {
+        return this.map.isEmpty();
+    }
+
     @Override
     public Iterator<Map.Entry<String, String>> iterator() {
-        return map.entrySet().iterator();
+        return this.map.entrySet().iterator();
     }
 
     /**
@@ -80,6 +75,6 @@ public class StandardTextMap implements TextMap {
         if (s1 == null) {
             return;
         }
-        map.put(s, StandardTextMap.filter(s1));
+        this.map.put(s, StandardTextMap.filter(s1));
     }
 }

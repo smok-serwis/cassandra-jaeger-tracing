@@ -14,10 +14,9 @@ final public class JaegerTracingSetup {
     public static final String DEFAULT_TRACE_KEY = "uber-trace-id";
     public static final JaegerTracer tracer;
     private static final String JAEGER_TRACE_KEY_ENV_NAME = "JAEGER_TRACE_KEY";
-
-    private static final Logger logger = LoggerFactory.getLogger(JaegerTracingSetup.class);
     public static final String trace_key = (System.getenv(JAEGER_TRACE_KEY_ENV_NAME) == null) ?
             DEFAULT_TRACE_KEY : System.getenv(JAEGER_TRACE_KEY_ENV_NAME);
+    private static final Logger logger = LoggerFactory.getLogger(JaegerTracingSetup.class);
 
     static {
         Configuration.SenderConfiguration sender_cfg = Configuration.SenderConfiguration.fromEnv();

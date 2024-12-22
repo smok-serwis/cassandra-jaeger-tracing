@@ -5,7 +5,14 @@ import io.jaegertracing.internal.JaegerSpanContext;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
+/**
+ * A dual purpose class.
+ *
+ * First, a map that maps our contexts to particular traces
+ * Second, a routing table that maps coordinator's sub-spans to contexts sent to replicas.
+ */
 public class SpanContextMap {
     final private Map<String, JaegerTraceState> map = new HashMap<>();
 
@@ -21,10 +28,6 @@ public class SpanContextMap {
         this.map.put(contextToString(state.parentSpan.context()), state);
     }
 
-    public void put(JaegerSpan span, JaegerTraceState jts) {
-        this.map.put(contextToString(span.context()), jts);
-    }
-
     public JaegerTraceState get(JaegerSpanContext context) {
         return this.map.get(contextToString(context));
     }
@@ -34,6 +37,10 @@ public class SpanContextMap {
         JaegerTraceState state = this.map.get(ctxt);
         this.map.remove(ctxt);
         return state;
+    }
+
+    public void remove(JaegerSpanContext context) {
+        this.map.remove(contextToString(context));
     }
 
     public void remove(JaegerSpan span) {
