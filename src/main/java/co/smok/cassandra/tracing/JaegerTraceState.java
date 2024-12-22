@@ -40,11 +40,15 @@ class JaegerTraceState extends CommonTraceState {
 
     public JaegerSpan span = null;
     public volatile long timestamp;
-    private volatile int refCount = 0;
-
     public JaegerSpan parentSpan = null;        // this is our private master span
     protected boolean isCoordinator;
+    private volatile int refCount = 0;
     private JaegerSpanContext parentContext = null;
+
+    private JaegerTraceState(InetAddressAndPort coordinator, Tracing.TraceType traceType) {
+        super(coordinator, null, traceType);
+        this.timestamp = clock.currentTimeMicros();
+    }
 
     /**
      * Build a new JaegerTraceState in the role of a coordinator
@@ -54,8 +58,8 @@ class JaegerTraceState extends CommonTraceState {
     public static JaegerTraceState asCoordinator(InetAddressAndPort coordinator, Tracing.TraceType traceType,
                                                  JaegerSpanContext context) {
         JaegerTraceState state = new JaegerTraceState(coordinator, traceType);
-        JaegerTracer.SpanBuilder builder = JaegerTracingSetup.tracer.buildSpan(traceType.toString())
-                .asChildOf(context).withStartTimestamp(clock.currentTimeMicros())
+        JaegerTracer.SpanBuilder builder = JaegerTracingSetup.tracer.buildSpan("Coordinator "+traceType.toString())
+                .asChildOf(context).withStartTimestamp(state.timestamp)
                 .withTag("started_at", Instant.now().toString())
                 .withTag("coordinator", coordinator.toString()).withTag("thread", Thread.currentThread().getName());
         state.parentSpan = builder.start();
@@ -70,7 +74,7 @@ class JaegerTraceState extends CommonTraceState {
     public static JaegerTraceState asFollower(InetAddressAndPort coordinator, Tracing.TraceType traceType,
                                               JaegerSpanContext parentContext) {
         JaegerTraceState state = new JaegerTraceState(coordinator, traceType);
-        state.parentSpan = JaegerTracingSetup.tracer.buildSpan(traceType.toString()).asChildOf(parentContext).withStartTimestamp(clock.currentTimeMicros()).start();
+        state.parentSpan = JaegerTracingSetup.tracer.buildSpan("Replica "+traceType.toString()).asChildOf(parentContext).withStartTimestamp(state.timestamp).start();
         state.parentContext = parentContext;
         state.isCoordinator = false;
         return state;
@@ -78,9 +82,10 @@ class JaegerTraceState extends CommonTraceState {
 
     /**
      * Returns a context to be attached to message sent somewhere.
+     * Call it once per message.
      * WARNING! This method is NOT idempotent!
      */
-    protected JaegerSpanContext getContextToAttach() {
+    protected JaegerSpanContext generateContextToAttach() {
         if (this.isCoordinator) {       // this should return coordinator's current span
             assert this.span != null;
             JaegerSpanContext context = this.span.context();
@@ -88,14 +93,9 @@ class JaegerTraceState extends CommonTraceState {
             return context;
         } else {
             // This means that the replica is going to reply and it better be a context span that coordinator gave us
-            this.stop();
             return this.parentContext;
+            // This trace state will be later closed during processing the request via traceOutgoingMessage()
         }
-    }
-
-    private JaegerTraceState(InetAddressAndPort coordinator, Tracing.TraceType traceType) {
-        super(coordinator, null, traceType);
-        this.timestamp = clock.currentTimeMicros();
     }
 
     @Override
@@ -143,7 +143,6 @@ class JaegerTraceState extends CommonTraceState {
     @Override
     protected void waitForPendingEvents() {
         long timeToWait = TIME_TO_WAIT_FOR_RESPONSES_IN_MCS;
-        boolean reported = false;
         while ((timeToWait > 0) && (this.refCount > 0)) {
             timeToWait = waitInterrupted(timeToWait);
         }
@@ -180,7 +179,8 @@ class JaegerTraceState extends CommonTraceState {
             this.waitForPendingEvents();
         }
         this.parentSpan.finish(clock.currentTimeMicros());
-    }
+       }
+
 
     @Override
     public boolean isEmpty() {

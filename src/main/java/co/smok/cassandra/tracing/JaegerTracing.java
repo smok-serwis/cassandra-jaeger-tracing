@@ -1,8 +1,6 @@
 package co.smok.cassandra.tracing;
 
-import io.jaegertracing.internal.JaegerSpan;
 import io.jaegertracing.internal.JaegerSpanContext;
-import io.opentracing.propagation.Binary;
 import io.opentracing.propagation.Format;
 import org.apache.cassandra.concurrent.ExecutorLocals;
 import org.apache.cassandra.locator.InetAddressAndPort;
@@ -29,10 +27,10 @@ import java.util.Map;
  * There is only one instance of this class, and it serves as a factory for TraceStates
  */
 public final class JaegerTracing extends Tracing {
-    protected static final JaegerTracingSetup setup = new JaegerTracingSetup();
+    private static final JaegerTracingSetup setup = new JaegerTracingSetup();
 
     private static final Logger logger = LoggerFactory.getLogger(JaegerTracing.class);
-
+    private static final InetAddressAndPort localHost = InetAddressAndPort.getLocalHost();
     /**
      * This class has two purposes:
      * 1. a replacement for Tracing.sessions more adequate to our needs
@@ -44,8 +42,6 @@ public final class JaegerTracing extends Tracing {
     final private SpanContextMap my_map = new SpanContextMap();
     // sub-spans of coordinator's parent span may issue requests of their own, we need to track them
     final private SpanContextMap routing_table = new SpanContextMap();
-
-    private static final InetAddressAndPort localHost = InetAddressAndPort.getLocalHost();
 
     /* a empty constructor is necessary for Cassandra to initialize this class **/
     public JaegerTracing() {
@@ -101,7 +97,7 @@ public final class JaegerTracing extends Tracing {
         state.parentSpan.setTag("request", request);
         String query = parameters.get("query");
         if (query != null) {
-            state.parentSpan.setTag("db.statement", client.toString());
+            state.parentSpan.setTag("db.statement", query);
         }
         if (client != null) {
             state.parentSpan.setTag("client", client.toString());
@@ -115,6 +111,17 @@ public final class JaegerTracing extends Tracing {
         return null;
     }
 
+    private Map<String, byte[]> addContextToMap(JaegerSpanContext context) {
+        return this.addContextToMap(context, new HashMap<>());
+    }
+
+    private Map<String, byte[]> addContextToMap(JaegerSpanContext context, Map<String, byte[]> params) {
+        BinaryExtractor be = new BinaryExtractor();
+        JaegerTracingSetup.tracer.inject(context, Format.Builtin.BINARY, be);
+        params.putAll(be.toCustomMap());
+        return params;
+    }
+
     @Override
     // This is called by the thread that holds the current state, so we can safely attach it.
     public Map<ParamType, Object> addTraceHeaders(Map<ParamType, Object> addToMutable) {
@@ -123,14 +130,12 @@ public final class JaegerTracing extends Tracing {
             return addToMutable;
         }
         JaegerTraceState state = (JaegerTraceState) ts;
-        BinaryExtractor be = new BinaryExtractor();
-        JaegerSpanContext context_to_attach = state.getContextToAttach();
-        JaegerTracingSetup.tracer.inject(context_to_attach, Format.Builtin.BINARY, be);
+        JaegerSpanContext context_to_attach = state.generateContextToAttach();
 
         if (state.isCoordinator) {
-            this.routing_table.put(state.getContextToAttach(), state);
+            this.routing_table.put(context_to_attach, state);
         }
-        addToMutable.put(ParamType.CUSTOM_MAP, be.toCustomMap());
+        addToMutable.put(ParamType.CUSTOM_MAP, this.addContextToMap(context_to_attach));
         return addToMutable;
     }
 
@@ -145,12 +150,52 @@ public final class JaegerTracing extends Tracing {
     @Override
     /**
      * This is called by the replica when sending a message to coordinator, or by coordinator when sending to a replica.
-     * But after headers have been attached
+     * But after headers have been attached.
+     *
+     * This will:
+     * 1. If it's a request, then it's our last chance to register some info about it. So we:
+     *      1. Extract the context from the header
+     *      2. Grab the respective trace session from routing table
+     *      3. Trace the message. The context will now change.
+     *      4. Re-register the new context as attached to this trace
+     * 2. If it's a response, then it's our final chance to close it for good.
      */
     public void traceOutgoingMessage(Message<?> message, int serializedSize, InetAddressAndPort sendTo) {
-        // We can't do much here, because we don't know who sent this message
+        final JaegerSpanContext context = this.getContextFromHeader(message.header);
+        if (context == null) {
+            return;
+        }
+
+        if (message.header.verb.isResponse()) {
+            // This is a response. We need to locate the trace for it and notify it.
+            JaegerTraceState ts = this.my_map.pop(context);
+            if (ts == null) {
+                logger.info("Tracing outgoing message for unknown context {}", context);
+                return;
+            }
+            ts.trace("Sending {} message to {} message size {} bytes as response", message.header.verb.toString(),
+                    sendTo.toString(), serializedSize);
+            ts.stop();
+        } else {
+            JaegerTraceState sender = this.routing_table.pop(context);
+            sender.subRef();        // since previous call to getContextToAttach incremented it
+            sender.trace("Sending {} message to {} message size {} bytes as request", message.header.verb.toString(),
+                    sendTo.toString(), serializedSize);
+
+            Map<String, byte[]> customParams = message.header.customParams();
+            JaegerSpanContext new_context = sender.generateContextToAttach();
+            addContextToMap(new_context, customParams);
+            this.routing_table.put(new_context, sender);
+        }
     }
 
+    private JaegerSpanContext getContextFromHeader(final Message.Header header) {
+        final BinaryExtractor be = new BinaryExtractor(header.customParams());
+        if (be.isEmpty()) {
+            return null;
+        }
+        return JaegerTracingSetup.tracer.extract(Format.Builtin.BINARY, be);
+    }
 
     @Override
     /**
@@ -159,11 +204,7 @@ public final class JaegerTracing extends Tracing {
      * This is allowed to return a null, but not allowed to set a thread-local state
      */
     public TraceState initializeFromMessage(final Message.Header header) {
-        final BinaryExtractor be = new BinaryExtractor(header.customParams());
-        if (be.isEmpty()) {
-            return null;
-        }
-        final JaegerSpanContext context = JaegerTracingSetup.tracer.extract(Format.Builtin.BINARY, be);
+        final JaegerSpanContext context = this.getContextFromHeader(header);
         if (context == null) {
             return null;
         }
@@ -172,7 +213,7 @@ public final class JaegerTracing extends Tracing {
             // It's a response, let's go find the responsible JaegerTraceState for it
             JaegerTraceState parent = this.routing_table.pop(context);
             if (parent == null) {
-                logger.info("Received a timeouted replica for context " + context.toString());
+                logger.info("Received a time-outed replica for context {}", context);
                 return null;
             }
             parent.responseReceived();
@@ -181,7 +222,7 @@ public final class JaegerTracing extends Tracing {
             // It's a command from the coordinator
             // It's not a response, it's a command from a master
             JaegerTraceState trace = JaegerTraceState.asFollower(header.from, header.traceType(), context);
-            my_map.put(trace);
+            this.my_map.put(context, trace);
             return trace;
         }
     }
@@ -209,7 +250,7 @@ public final class JaegerTracing extends Tracing {
             } else {
                 JaegerTraceState jts = JaegerTraceState.asCoordinator(localHost, traceType, context);
                 traceState = jts;
-                my_map.put(jts);
+                this.my_map.put(jts);
             }
         }
 

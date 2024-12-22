@@ -10,10 +10,6 @@ public class BinaryExtractor implements Binary {
 
     private ByteBuffer buffer = null;
 
-    public boolean isEmpty() {
-        return this.buffer == null;
-    }
-
     public BinaryExtractor() {
     }
 
@@ -25,6 +21,10 @@ public class BinaryExtractor implements Binary {
             return;
         }
         this.buffer = ByteBuffer.wrap(map.get(JaegerTracingSetup.trace_key)).asReadOnlyBuffer();
+    }
+
+    public boolean isEmpty() {
+        return this.buffer == null;
     }
 
     @Override

@@ -2,7 +2,7 @@
 
 This repository is a continuation of [https://github.com/infracloudio/cassandra-jaeger-tracing](https://github.com/infracloudio/cassandra-jaeger-tracing).
 
-Work is progressing on Cassandra 5.0.2, but this is practically production-ready.
+**This works on Cassandra 5.0.2**
 
 Cassandra provides [pluggable tracing](https://web.archive.org/web/20160402125018/http://www.planetcassandra.org/blog/cassandra-3-4-release-overview/)
 starting from version 3.4. In versions 4 and 4.1 it was significantly altered, but the maintainers
