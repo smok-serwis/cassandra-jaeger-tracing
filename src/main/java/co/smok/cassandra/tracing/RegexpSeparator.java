@@ -109,6 +109,8 @@ public class RegexpSeparator {
             new MultiRegexp("", "Index mean cardinalities are (?<indexesestimates>.*). Scanning with (?<indexes>.*).",
                     new String[]{"indexesestimates", "indexes"}, new String[]{"indexesestimates", "indexes"}, new String[]{"index_estimate", "index"}),
             new SingleRegexp("Executing read using an index", "Executing read on (?<keyspace>.*)\\.(?<table>.*) using index (?<index>.*)", new String[]{"index", "table", "keyspace"}),
+            new SingleRegexp("Executing seq scan", "Executing seq scan across (?<sstablecount>\\d+) sstables for (min((?<start>-?\\d+)), min((?<stop>-?\\d+))]",
+                    new String[]{"sstablecount","start","stop"}),
             new SingleRegexp("Submitted concurrent range requests", "Submitted (?<amount>\\d+) concurrent range requests", new String[]{"amount"}),
             new SingleRegexp("Submitted range requests with a concurrency",
                     "Submitting range requests on (?<noranges>\\d+) ranges with a concurrency of (?<concurrency>\\d+) \\((?<rowsperrange>[0-9]*\\.?[0-9]*) rows per range expected\\)",
